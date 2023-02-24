@@ -34,6 +34,7 @@ int main(void) {
   // certified public value for client
   uint8_t yc[crypto_core_ristretto255_BYTES];
   crypto_scalarmult_ristretto255_base(yc, kc);
+  dump(yc, sizeof yc, "pubkey         ");
 
   // encrypt
   uint8_t w[crypto_core_ristretto255_BYTES];
@@ -71,6 +72,7 @@ int main(void) {
   uint8_t delta[crypto_core_ristretto255_SCALARBYTES];
   uokms_update_kc(kc,yc,delta);
   uokms_update_w(delta, w);
+  dump(yc, sizeof yc, "updated pubkey ");
 
   // decrypt again, with updated key
   // client blinds
