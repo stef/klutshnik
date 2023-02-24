@@ -21,6 +21,22 @@ static void topart(TOPRF_Part *r, const TOPRF_Share *s) {
   crypto_scalarmult_ristretto255_base(r->value, s->value);
 }
 
+int tuokms_pubkey(const uint8_t n, const uint8_t threshold,
+                  const TOPRF_Share kc_shares[n][2],
+                  uint8_t yc[crypto_core_ristretto255_BYTES]) {
+
+  uint8_t responses[threshold][TOPRF_Part_BYTES];
+  for(int i=0;i<threshold;i++) {
+    topart((TOPRF_Part *) responses[i], &kc_shares[i][0]);
+  }
+  if(toprf_thresholdmult(threshold, responses, yc)) {
+    fail("failed to calculate public dkg key");
+    return 1;
+  }
+
+  return 0;
+}
+
 int tuokms_dkg(const uint8_t n, const uint8_t threshold,
                TOPRF_Share kc_shares[n][2],
                uint8_t yc[crypto_core_ristretto255_BYTES]) {
@@ -58,35 +74,26 @@ int tuokms_dkg(const uint8_t n, const uint8_t threshold,
     dkg_finish(n,qual,sent_shares,i+1,&kc_shares[i][0],&kc_shares[i][1]);
   }
 
+  // we recalculate yc elsewhere when rotating keys
   if(yc==NULL) return 0;
 
   // calculate public "key"
-  const size_t response_len = threshold;
-  uint8_t responses[response_len][TOPRF_Part_BYTES];
-
-  for(int i=0;i<threshold;i++) {
-    topart((TOPRF_Part *) responses[i], &kc_shares[i][0]);
-  }
-  if(toprf_thresholdmult(response_len, responses, yc)) {
-    fail("failed to calculate public dkg key");
-    return 1;
-  }
+  if(tuokms_pubkey(n, threshold, kc_shares, yc)) return 1;
 
   return 0;
 }
 
-int tuokms_update_kc(const uint8_t n, const uint8_t threshold,
-                      TOPRF_Share kc_shares[n][2],
-                      uint8_t yc[crypto_core_ristretto255_BYTES],
-                      uint8_t delta[crypto_core_ristretto255_SCALARBYTES]) {
-
+int tuokms_update(const uint8_t n, const uint8_t threshold,
+                  TOPRF_Share kc_shares[n][2],
+                  uint8_t yc[crypto_core_ristretto255_BYTES],
+                  uint8_t w[crypto_core_ristretto255_BYTES]) {
   // The distributed update protocol assumes that n servers S1, . . . , Sn have a sharing (k1, . . . , kn)
   // of a key k. (see kc_shares parameter)
 
   // To produce a new key k′ the servers jointly generate a sharing ρ1, . . . , ρn of a random
   // secret ρ ∈ Zq and
   TOPRF_Share kc_new[n][2];
-  if(tuokms_dkg(n,threshold, kc_new, yc)) {
+  if(tuokms_dkg(n,threshold, kc_new, NULL)) {
     fail("failed update dkg");
     return 1;
   }
@@ -117,13 +124,18 @@ int tuokms_update_kc(const uint8_t n, const uint8_t threshold,
   uint8_t p[crypto_core_ristretto255_SCALARBYTES];
   dkg_reconstruct(threshold, kc_new, p);
 
+  uint8_t delta[crypto_core_ristretto255_SCALARBYTES];
   crypto_core_ristretto255_scalar_invert(delta, p);
+  uokms_update_w(delta, w);
+
+  // recalculate yc
+  if(tuokms_pubkey(n, threshold, kc_shares, yc)) return 1;
 
   return 0;
 }
 
 int main(void) {
-  // setup
+  // initialize
   // client key
   uint8_t n=5, threshold=3;
   // certified public value for client
@@ -133,6 +145,9 @@ int main(void) {
     fail("failed initial dkg");
     return 1;
   }
+  dump(yc, sizeof yc, "pubkey         ");
+
+  /////////////////////////////////////////////////////////////////////////////////////
 
   // encrypt
   uint8_t w[crypto_core_ristretto255_BYTES];
@@ -140,6 +155,8 @@ int main(void) {
   const size_t pt_len=sizeof(plaintext);
   uint8_t ciphertext[pt_len+crypto_secretbox_NONCEBYTES+crypto_secretbox_MACBYTES];
   uokms_encrypt(yc, plaintext, pt_len, w, ciphertext);
+
+  /////////////////////////////////////////////////////////////////////////////////////
 
   // decrypt
   // client blinds
@@ -174,10 +191,13 @@ int main(void) {
     return 1;
   }
 
+  /////////////////////////////////////////////////////////////////////////////////////
+
   // update key
-  uint8_t delta[crypto_core_ristretto255_SCALARBYTES];
-  tuokms_update_kc(n,threshold,kc_shares,yc,delta);
-  uokms_update_w(delta, w);
+  tuokms_update(n,threshold,kc_shares,yc,w);
+  dump(yc, sizeof yc, "updated pubkey ");
+
+  /////////////////////////////////////////////////////////////////////////////////////
 
   // decrypt again, with updated key
   // client blinds
