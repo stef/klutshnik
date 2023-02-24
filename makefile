@@ -10,10 +10,10 @@ asan: CFLAGS=-fsanitize=address -static-libasan -g -march=native -Wall -O2 -g -f
 asan: LDFLAGS+= -fsanitize=address -static-libasan
 asan: all
 
-tuokms: tuokms.c thmult.c matrices.c utils.c
+tuokms: tuokms.c thmult.c matrices.c common.c utils.c
 	gcc $(CFLAGS) -o $@ $^ $(LDFLAGS)
 
-uokms: uokms.c utils.c
+uokms: uokms.c common.c utils.c
 	gcc $(CFLAGS) -o $@ $^ $(LDFLAGS)
 
 clean:
