@@ -30,7 +30,7 @@ int tuokms_pubkey(const uint8_t n, const uint8_t threshold,
     topart((TOPRF_Part *) responses[i], &kc_shares[i][0]);
   }
   if(toprf_thresholdmult(threshold, responses, yc)) {
-    fail("failed to calculate public dkg key");
+    fail("to calculate public dkg key");
     return 1;
   }
 
@@ -46,7 +46,7 @@ int tuokms_dkg(const uint8_t n, const uint8_t threshold,
 
   for(int i=0;i<n;i++) { // every kms runs dkg_start for themselves
     if(dkg_start(n, threshold, commitments[i], shares[i])) {
-      fail("failed dkg_start for %d",i);
+      fail("dkg_start for %d",i);
       return 1;
     }
   }
@@ -94,7 +94,7 @@ int tuokms_update(const uint8_t n, const uint8_t threshold,
   // secret ρ ∈ Zq and
   TOPRF_Share kc_new[n][2];
   if(tuokms_dkg(n,threshold, kc_new, NULL)) {
-    fail("failed update dkg");
+    fail("update dkg");
     return 1;
   }
 
@@ -134,6 +134,111 @@ int tuokms_update(const uint8_t n, const uint8_t threshold,
   return 0;
 }
 
+int tuokms_blind(const uint8_t w[crypto_core_ristretto255_BYTES],
+                 uint8_t r[crypto_core_ristretto255_SCALARBYTES],
+                 uint8_t c[crypto_core_ristretto255_SCALARBYTES],
+                 uint8_t d[crypto_core_ristretto255_SCALARBYTES],
+                 uint8_t blinded[crypto_core_ristretto255_BYTES],
+                 uint8_t verifier[crypto_core_ristretto255_BYTES]) {
+  // check if w is a valid point
+  if(!crypto_core_ristretto255_is_valid_point(w)) return 1;
+
+  crypto_core_ristretto255_scalar_random(r);
+  if(crypto_scalarmult_ristretto255(blinded, r, w)) return 1;
+
+  crypto_core_ristretto255_scalar_random(c);
+  if(crypto_scalarmult_ristretto255(verifier, c, w)) return 1;
+  crypto_core_ristretto255_scalar_random(d);
+  uint8_t tmp[crypto_core_ristretto255_BYTES];
+  crypto_scalarmult_ristretto255_base(tmp, d);
+  crypto_core_ristretto255_add(verifier, verifier, tmp);
+
+  return 0;
+}
+
+int tuokms_evaluate(const uint8_t kc[crypto_core_ristretto255_SCALARBYTES],
+                    const uint8_t alpha[crypto_core_ristretto255_BYTES],
+                    const uint8_t verifier[crypto_core_ristretto255_BYTES],
+                    uint8_t beta[crypto_core_ristretto255_BYTES],
+                    uint8_t verifier_beta[crypto_core_ristretto255_BYTES]) {
+  // check if w is a valid point
+  if(!crypto_core_ristretto255_is_valid_point(alpha)) return 1;
+  if(crypto_scalarmult_ristretto255(beta, kc, alpha)) return 1;
+
+  if(!crypto_core_ristretto255_is_valid_point(verifier)) return 1;
+  if(crypto_scalarmult_ristretto255(verifier_beta, kc, verifier)) return 1;
+
+  return 0;
+}
+
+int tuokms_decrypt(const uint8_t *ciphertext, const size_t ct_len,
+                  const uint8_t r[crypto_core_ristretto255_SCALARBYTES],
+                  const uint8_t c[crypto_core_ristretto255_SCALARBYTES],
+                  const uint8_t d[crypto_core_ristretto255_SCALARBYTES],
+                  const uint8_t yc[crypto_core_ristretto255_BYTES],
+                  const uint8_t beta[crypto_core_ristretto255_BYTES],
+                  const uint8_t verifier_beta[crypto_core_ristretto255_BYTES],
+                  uint8_t *plaintext) {
+  // check if beta is a valid point
+  if(!crypto_core_ristretto255_is_valid_point(beta)) {
+    fail("invalid beta");
+    return 1;
+  }
+  if(!crypto_core_ristretto255_is_valid_point(verifier_beta)) {
+    fail("invalid verifier_beta");
+    return 1;
+  }
+
+  // 1/r
+  uint8_t r_inv[crypto_core_ristretto255_SCALARBYTES];
+  crypto_core_ristretto255_scalar_invert(r_inv, r);
+
+  // beta * 1/r
+  uint8_t gk[crypto_core_ristretto255_BYTES];
+  if(crypto_scalarmult_ristretto255(gk, r_inv, beta)) {
+    fail("to divide by r");
+    return 1;
+  }
+
+
+  uint8_t tmp[crypto_core_ristretto255_BYTES];
+  uint8_t c_inv[crypto_core_ristretto255_SCALARBYTES];
+  crypto_core_ristretto255_scalar_invert(c_inv, c);
+  uint8_t d_neg[crypto_core_ristretto255_SCALARBYTES];
+  crypto_core_ristretto255_scalar_negate(d_neg, d);
+  // tmp = verifier_beta ^ (1/c)
+  if(crypto_scalarmult_ristretto255(tmp, c_inv, verifier_beta)) {
+    fail("to divide by c");
+    return 1;
+  }
+  uint8_t tmp1[crypto_core_ristretto255_BYTES];
+  crypto_core_ristretto255_scalar_mul(d_neg,d_neg,c_inv);
+  // tmp1 = yc^(-d/c)
+  if(crypto_scalarmult_ristretto255(tmp1, d_neg, yc)) {
+    fail("to divide by c");
+    return 1;
+  }
+  // tmp = verifer_beta^(1/c)*yc^(-d/c)
+  crypto_core_ristretto255_add(tmp, tmp1, tmp);
+  if(memcmp(tmp, gk, sizeof gk)!=0) {
+    fail("to verify dek");
+    // todo return something special so that caller can if threshold setting check which server response was invalid
+    return 1;
+  }
+
+  // H(beta * 1/r)
+  uint8_t dek[crypto_secretbox_KEYBYTES];
+  crypto_generichash(dek, sizeof dek, gk, sizeof gk, NULL, 0);
+
+  if (crypto_secretbox_open_easy(plaintext, ciphertext+crypto_secretbox_NONCEBYTES, ct_len-crypto_secretbox_NONCEBYTES, ciphertext, dek) != 0) {
+    /* message forged! */
+    fail("message forged");
+    return 1;
+  }
+
+  return 0;
+}
+
 int main(void) {
   // initialize
   // client key
@@ -142,7 +247,7 @@ int main(void) {
   uint8_t yc[crypto_core_ristretto255_BYTES];
   TOPRF_Share kc_shares[n][2];
   if(tuokms_dkg(n,threshold, kc_shares, yc)) {
-    fail("failed initial dkg");
+    fail("initial dkg");
     return 1;
   }
   dump(yc, sizeof yc, "pubkey         ");
@@ -161,33 +266,40 @@ int main(void) {
   // decrypt
   // client blinds
   uint8_t r[crypto_core_ristretto255_SCALARBYTES];
+  uint8_t c[crypto_core_ristretto255_SCALARBYTES];
+  uint8_t d[crypto_core_ristretto255_SCALARBYTES];
   uint8_t alpha[crypto_core_ristretto255_BYTES];
-  uokms_blind(w, r, alpha);
+  uint8_t verifier[crypto_core_ristretto255_BYTES];
+  tuokms_blind(w, r, c, d, alpha, verifier);
 
   // server
-  uint8_t beta[crypto_core_ristretto255_BYTES];
   // calculate points of shares
   // this really happens at each peer separately
   uint8_t xresps[n][TOPRF_Part_BYTES];
+  uint8_t vresps[n][TOPRF_Part_BYTES];
   for(size_t i=0;i<n;i++) { // we calculate all, but we don't need all
     xresps[i][0]=kc_shares[i][0].index;
-    if(uokms_evaluate(kc_shares[i][0].value, alpha, xresps[i]+1)) {
-      fail("failed at uokms_evaluate");
+    vresps[i][0]=kc_shares[i][0].index;
+    if(tuokms_evaluate(kc_shares[i][0].value, alpha, verifier, xresps[i]+1, vresps[i]+1)) {
+      fail("at uokms_evaluate");
       return 1;
     }
   }
   // we only select the first t shares, should be rather random
+  uint8_t beta[crypto_core_ristretto255_BYTES];
+  uint8_t verifier_beta[crypto_core_ristretto255_BYTES];
   if(toprf_thresholdmult(threshold, xresps, beta)) return 1;
+  if(toprf_thresholdmult(threshold, vresps, verifier_beta)) return 1;
 
   // client unblinds and decrypts
   uint8_t plaintext1[pt_len];
-  if(uokms_decrypt(ciphertext, sizeof ciphertext, r, beta, plaintext1)) {
-    fail("failed at uokms_decrypt");
+  if(tuokms_decrypt(ciphertext, sizeof ciphertext, r, c, d, yc, beta, verifier_beta, plaintext1)) {
+    fail("at uokms_decrypt");
     return 1;
   }
 
   if(memcmp(plaintext,plaintext1,pt_len)!=0) {
-    fail("failed at comparing plaintexts");
+    fail("at comparing plaintexts");
     return 1;
   }
 
@@ -201,27 +313,29 @@ int main(void) {
 
   // decrypt again, with updated key
   // client blinds
-  uokms_blind(w, r, alpha);
+  tuokms_blind(w, r, c, d, alpha, verifier);
 
   // server
   for(size_t i=0;i<n;i++) { // we calculate all, but we don't need all
     xresps[i][0]=kc_shares[i][0].index;
-    if(uokms_evaluate(kc_shares[i][0].value, alpha, xresps[i]+1)) {
-      fail("failed at uokms_evaluate");
+    vresps[i][0]=kc_shares[i][0].index;
+    if(tuokms_evaluate(kc_shares[i][0].value, alpha, verifier, xresps[i]+1, vresps[i]+1)) {
+      fail("at uokms_evaluate");
       return 1;
     }
   }
   // we only select the first t shares, should be rather random
   if(toprf_thresholdmult(threshold, xresps, beta)) return 1;
+  if(toprf_thresholdmult(threshold, vresps, verifier_beta)) return 1;
 
   // client unblinds and decrypts
-  if(uokms_decrypt(ciphertext, sizeof ciphertext, r, beta, plaintext1)) {
-    fail("failed at uokms_decrypt");
+  if(tuokms_decrypt(ciphertext, sizeof ciphertext, r, c, d, yc, beta, verifier_beta, plaintext1)) {
+    fail("at uokms_decrypt");
     return 1;
   }
 
   if(memcmp(plaintext,plaintext1,pt_len)!=0) {
-    fail("failed at comparing plaintexts");
+    fail("at comparing plaintexts");
     return 1;
   }
 
