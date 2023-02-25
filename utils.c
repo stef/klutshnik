@@ -31,7 +31,7 @@ void dump(const uint8_t *p, const size_t len, const char* msg, ...) {
 void fail(char* msg, ...) {
   va_list args;
   va_start(args, msg);
-  fprintf(stderr, "\e[0;31m");
+  fprintf(stderr, "\e[0;31mfailed ");
   vfprintf(stderr, msg, args);
   va_end(args);
   fprintf(stderr, "\e[0m\n");
