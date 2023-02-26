@@ -24,6 +24,7 @@ static void topart(TOPRF_Part *r, const TOPRF_Share *s) {
 int tuokms_pubkey(const uint8_t n, const uint8_t threshold,
                   const TOPRF_Share kc_shares[n][2],
                   uint8_t yc[crypto_core_ristretto255_BYTES]) {
+  // todo implement 2nd part of the dlog paper!
 
   uint8_t responses[threshold][TOPRF_Part_BYTES];
   for(int i=0;i<threshold;i++) {
