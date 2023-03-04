@@ -1,14 +1,11 @@
 #!/usr/bin/env python
+# SPDX-FileCopyrightText: 2023, Marsiske Stefan
+# SPDX-License-Identifier: GPL-3.0-or-later
 
-import io
-import sys
-import socket
-import struct
-import select
-import pysodium
-import ctypes
-import ctypes.util
-import argparse
+
+import os, io, sys, socket, struct, select
+import ctypes, ctypes.util, tomllib
+import pysodium, argparse
 from binascii import unhexlify
 
 kmslib = ctypes.cdll.LoadLibrary(ctypes.util.find_library('kms') or
@@ -49,14 +46,14 @@ def connect(servers):
 def gather(conns, expectedmsglen, n, proc=None):
    responses={}
    while len(responses)!=n:
-       r, _,_ =select.select(conns,[],[],5)
-       if not r: sys.exit(1)
-       for fd in r:
-           idx = conns.index(fd)
-           if idx in responses:
-               continue
-           pkt = read_pkt(fd, expectedmsglen)
-           responses[idx]=pkt if not proc else proc(pkt)
+      r, _,_ =select.select(conns,[],[],5)
+      if not r: sys.exit(1)
+      for fd in r:
+         idx = conns.index(fd)
+         if idx in responses:
+            continue
+         pkt = read_pkt(fd, expectedmsglen)
+         responses[idx]=pkt if not proc else proc(pkt)
    return responses
 
 def dkg(servers,threshold):
@@ -146,9 +143,9 @@ def update(servers,threshold,keyid):
    conns = connect(servers)
 
    for index,c in enumerate(conns):
-       msg = b"%c%c%c%c%c%s" % (VERSION, TUOKMS_Update, index+1, threshold, n, keyid)
-       msg = struct.pack("H", len(msg)) + msg
-       c.sendall(msg)
+      msg = b"%c%c%c%c%c%s" % (VERSION, TUOKMS_Update, index+1, threshold, n, keyid)
+      msg = struct.pack("H", len(msg)) + msg
+      c.sendall(msg)
 
    expectedmsglen=(pysodium.crypto_core_ristretto255_BYTES * threshold) + (33*n*2)
    responders=gather(conns, expectedmsglen, n, lambda pkt: (pkt[:threshold*pysodium.crypto_core_ristretto255_BYTES], split_by_n(pkt[threshold*pysodium.crypto_core_ristretto255_BYTES:], 2*33)) )
@@ -180,56 +177,83 @@ def update(servers,threshold,keyid):
    return yc.raw, delta
 
 def update_w(delta, w):
-    kmslib.uokms_update_w(delta,w)
-    return w
+   kmslib.uokms_update_w(delta,w)
+   return w
 
 def test():
-    threshold, servers = 3, [("localhost", 10000),
-                             ('localhost', 10001),
-                             ('localhost', 10002),
-                             ('localhost', 10003),
-                             ('localhost', 10004)]
-    pubkey, keyid = dkg(servers, threshold)
-    print("pubkey", pubkey)
+   threshold, servers = 3, [("localhost", 10000),
+                            ('localhost', 10001),
+                            ('localhost', 10002),
+                            ('localhost', 10003),
+                            ('localhost', 10004)]
+   pubkey, keyid = dkg(servers, threshold)
+   print("pubkey", pubkey)
 
-    # encrypt something
-    w, ct = encrypt(b"hello world", pubkey)
-    print(w, ct)
+   # encrypt something
+   w, ct = encrypt(b"hello world", pubkey)
+   print(w, ct)
 
-    # decrypt
-    print(decrypt(w,ct,pubkey,servers,threshold,keyid))
+   # decrypt
+   print(decrypt(w,ct,pubkey,servers,threshold,keyid))
 
-    pubkey, delta = update(servers, threshold, keyid)
-    w = update_w(delta, w)
+   pubkey, delta = update(servers, threshold, keyid)
+   w = update_w(delta, w)
 
-    print(w, ct)
-    print(decrypt(w,ct,pubkey,servers,threshold,keyid))
+   print(w, ct)
+   print(decrypt(w,ct,pubkey,servers,threshold,keyid))
 
-    w1, ct1 = encrypt(b"foobarbaz23", pubkey)
-    print(decrypt(w1,ct1,pubkey,servers,threshold,keyid))
+   w1, ct1 = encrypt(b"foobarbaz23", pubkey)
+   print(decrypt(w1,ct1,pubkey,servers,threshold,keyid))
 
 def savekey(keyid, pubkey, threshold):
-    # todo make location of pubkeys configurable
-    with open(f"keys/{keyid.hex()}", 'wb') as fd:
-        fd.write(bytes([threshold]))
-        fd.write(pubkey)
+   # todo make location of pubkeys configurable
+   with open(f"keys/{keyid.hex()}", 'wb') as fd:
+      fd.write(bytes([threshold]))
+      fd.write(pubkey)
 
 def loadkey(keyid):
-    with open(f"keys/{keyid}", 'rb') as fd:
-        threshold = int(fd.read(1)[0])
-        return fd.read(), threshold
+   with open(f"keys/{keyid}", 'rb') as fd:
+      threshold = int(fd.read(1)[0])
+      return fd.read(), threshold
 
-def parse_servers(servers):
+def parse_servers(servers, config):
    res = []
-   for s in servers:
+   for s in servers or []:
       host, port = s.split(":")
       port = int(port)
       host = host or "localhost"
       res.append((host, port))
+   if res: return res
+
+   for k,v in config.get('servers',{}).items():
+       host = v.get('host',"localhost")
+       port = v.get('port')
+       res.append((host, port))
    return res
 
+def getcfg():
+  paths=[
+      # read global cfg
+      '/etc/tuokms/config',
+      # update with per-user configs
+      os.path.expanduser("~/.tuokmsrc"),
+      # over-ride with local directory config
+      os.path.expanduser("~/.config/tuokms/config"),
+      os.path.expanduser("tuokms.cfg")
+  ]
+  config = dict()
+  for path in paths:
+    try:
+        with open(path, "rb") as f:
+            data = tomllib.load(f)
+    except FileNotFoundError:
+        continue
+    config.update(data)
+  return config
 
 def main(params=sys.argv):
+    config = getcfg()
+
     parser = argparse.ArgumentParser(description='tuokms cli'
     f"usage: {sys.argv[0]} -c <genkey|encrypt|decrypt|update>"
     f"       {sys.argv[0]} -c genkey -t threshold -s server1:port server2:port ..."
@@ -243,10 +267,13 @@ def main(params=sys.argv):
     parser.add_argument('-k', '--keyid')
     args = parser.parse_args()
 
-    if args.server:
-        servers=parse_servers(args.server)
+    servers=parse_servers(args.server, config)
 
     if args.cmd=="genkey":
+        if args.threshold*2 + 1 < len(servers):
+            print("Warning this key will not be updatable.", file=sys.stderr)
+            print("You need to have at least 2*threshold+1 servers for updatable keys", file=sys.stderr)
+            if input("press y/Y to continue") not in ('y','Y'): return
         pubkey, keyid = dkg(servers, args.threshold)
         savekey(keyid, pubkey, args.threshold)
         print("keyid", keyid.hex())
