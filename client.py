@@ -284,7 +284,9 @@ def getcfg():
 def main(params=sys.argv):
     global config
     config = getcfg()
-    config['key']=KeyPair.from_bytes(a2b_base64(config['key']))
+
+    with open(config['key'],'r') as fd:
+        config['key']=KeyPair.from_bytes(a2b_base64(fd.read()))
 
     parser = argparse.ArgumentParser(description='tuokms cli'
     f"usage: {sys.argv[0]} -c <genkey|encrypt|decrypt|update>"
