@@ -4,7 +4,7 @@ CC=gcc
 SOEXT=so
 STATICEXT=a
 
-all: tuokms uokms libkms.so kms
+all: libkms.so kms
 
 asan: CFLAGS=-fsanitize=address -static-libasan -g -march=native -Wall -O2 -g -fstack-protector-strong -fpic -fstack-clash-protection -fcf-protection=full -Werror=format-security -Werror=implicit-function-declaration -Wl, -z,noexecstack
 asan: LDFLAGS+= -fsanitize=address -static-libasan
