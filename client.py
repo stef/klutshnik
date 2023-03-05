@@ -243,7 +243,7 @@ def test():
 
 def savekey(keyid, pubkey, threshold):
    # todo make location of pubkeys configurable
-   with open(f"keys/{keyid.hex()}", 'wb') as fd:
+   with open(f"{config['keystore']}/{keyid.hex()}", 'wb') as fd:
       fd.write(bytes([threshold]))
       fd.write(pubkey)
 
