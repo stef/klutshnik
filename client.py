@@ -6,7 +6,11 @@
 import os, io, sys, socket, struct, select
 import ctypes, ctypes.util, tomllib
 import pysodium, argparse
-from binascii import unhexlify
+from binascii import unhexlify, a2b_base64
+from dissononce.extras.meta.protocol.factory import NoiseProtocolFactory
+from dissononce.processing.handshakepatterns.interactive.XK import XKHandshakePattern
+from dissononce.dh.x25519.keypair import KeyPair
+from dissononce.dh.x25519.public import PublicKey
 
 kmslib = ctypes.cdll.LoadLibrary(ctypes.util.find_library('kms') or
                                  ctypes.util.find_library('libkms.so') or
@@ -22,49 +26,89 @@ TUOKMS_Update = 3
 
 KEYID_SIZE = 16
 
-def read_pkt(s,size):
-   res = []
-   read = 0
-   while read<size or len(res[-1])==0:
-     res.append(s.recv(size-read))
-     read+=len(res[-1])
-   return b''.join(res)
+config = None
+
+
+class NoiseWrapper():
+   def __init__(self, fd, pubkey):
+      global config
+      self.fd = fd
+      protocol = NoiseProtocolFactory().get_noise_protocol('Noise_XK_25519_ChaChaPoly_BLAKE2b')
+      handshakestate = protocol.create_handshakestate()
+
+      # initialize handshakestate objects
+      handshakestate.initialize(XKHandshakePattern(), True, b'', s=config['key'], rs=pubkey)
+
+      # step 1
+      message_buffer = bytearray()
+      handshakestate.write_message(b'', message_buffer)
+
+      fd.sendall(message_buffer)
+
+      # step 2
+      message_buffer = fd.recv(48)
+      handshakestate.read_message(bytes(message_buffer), bytearray())
+
+      # step 3
+      message_buffer = bytearray()
+      self.state = handshakestate.write_message(b'', message_buffer)
+      fd.sendall(message_buffer)
+
+   def sendall(self, pkt):
+      ct = self.state[0].encrypt_with_ad(b'', pkt)
+      msg = struct.pack(">H", len(ct)) + ct
+      self.fd.sendall(msg)
+
+   def read_pkt(self,size):
+      res = []
+      read = 0
+      plen = self.fd.recv(2)
+      if len(plen)!=2:
+          print("plen: ", plen)
+          raise ValueError
+      plen = struct.unpack(">H", plen)[0]
+      while read<plen or len(res[-1])==0:
+        res.append(self.fd.recv(plen-read))
+        read+=len(res[-1])
+      return self.state[1].decrypt_with_ad(b'', b''.join(res))
 
 def split_by_n(obj, n):
   # src https://stackoverflow.com/questions/9475241/split-string-every-nth-character
   return [obj[i:i+n] for i in range(0, len(obj), n)]
 
-def connect(servers):
+def connect(servers, op, threshold, n, keyid):
    conns = []
-   for host,port in servers:
+   for host,port,pubkey in servers:
        fd = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-       conns.append(fd)
-       conns[-1].settimeout(15)
-       conns[-1].connect((host, port))
+       fd.settimeout(15)
+       fd.connect((host, port))
+       noised =NoiseWrapper(fd, pubkey)
+       conns.append(noised)
+
+   for index,c in enumerate(conns):
+      msg = b"%c%c%c%c%c%s" % (VERSION, op, index+1, threshold, n, keyid)
+      c.sendall(msg)
+
    return conns
 
 def gather(conns, expectedmsglen, n, proc=None):
    responses={}
    while len(responses)!=n:
-      r, _,_ =select.select(conns,[],[],5)
+      fds={x.fd: (i, x) for i,x in enumerate(conns)}
+      r, _,_ =select.select(fds.keys(),[],[],5)
       if not r: sys.exit(1)
       for fd in r:
-         idx = conns.index(fd)
+         idx = fds[fd][0]
          if idx in responses:
             continue
-         pkt = read_pkt(fd, expectedmsglen)
+         pkt = fds[fd][1].read_pkt(expectedmsglen)
          responses[idx]=pkt if not proc else proc(pkt)
    return responses
 
 def dkg(servers,threshold):
    n = len(servers)
    keyid = pysodium.randombytes(KEYID_SIZE)
-   conns = connect(servers)
-
-   for index,c in enumerate(conns):
-       msg = b"%c%c%c%c%c%s" % (VERSION, DKG, index+1, threshold, n, keyid)
-       msg = struct.pack("H", len(msg)) + msg
-       c.sendall(msg)
+   conns = connect(servers, DKG, threshold, n, keyid)
 
    responders=gather(conns, (pysodium.crypto_core_ristretto255_BYTES * threshold) + (33*n*2), n, lambda x: (x[:threshold*pysodium.crypto_core_ristretto255_BYTES], split_by_n(x[threshold*pysodium.crypto_core_ristretto255_BYTES:], 2*33)) )
 
@@ -113,12 +157,10 @@ def decrypt(w,ct,pubkey,servers,threshold,keyid):
    r,c,d,a,v = blind(w)
    # send to servers
    n = len(servers)
-   conns = connect(servers)
+   conns = connect(servers, Evaluate, threshold, n, keyid)
 
    for index,conn in enumerate(conns):
-       msg = b"%c%c%c%c%c%s" % (VERSION, Evaluate, index+1, threshold, n, keyid)
-       msg += a + v
-       msg = struct.pack("H", len(msg)) + msg
+       msg = a + v
        conn.sendall(msg)
 
    # receive responses from tuokms_evaluate
@@ -140,12 +182,7 @@ def reconstruct(threshold, shares):
 
 def update(servers,threshold,keyid):
    n = len(servers)
-   conns = connect(servers)
-
-   for index,c in enumerate(conns):
-      msg = b"%c%c%c%c%c%s" % (VERSION, TUOKMS_Update, index+1, threshold, n, keyid)
-      msg = struct.pack("H", len(msg)) + msg
-      c.sendall(msg)
+   conns = connect(servers, TUOKMS_Update, threshold, n, keyid)
 
    expectedmsglen=(pysodium.crypto_core_ristretto255_BYTES * threshold) + (33*n*2)
    responders=gather(conns, expectedmsglen, n, lambda pkt: (pkt[:threshold*pysodium.crypto_core_ristretto255_BYTES], split_by_n(pkt[threshold*pysodium.crypto_core_ristretto255_BYTES:], 2*33)) )
@@ -162,7 +199,6 @@ def update(servers,threshold,keyid):
    for i in range(n):
        msg = b''.join([mul_shares[j][i] for j in range(n)])
        conns[i].sendall(msg)
-
 
    new_shares=gather(conns, 33, n)
 
@@ -216,19 +252,13 @@ def loadkey(keyid):
       threshold = int(fd.read(1)[0])
       return fd.read(), threshold
 
-def parse_servers(servers, config):
+def parse_servers(config):
    res = []
-   for s in servers or []:
-      host, port = s.split(":")
-      port = int(port)
-      host = host or "localhost"
-      res.append((host, port))
-   if res: return res
-
    for k,v in config.get('servers',{}).items():
        host = v.get('host',"localhost")
        port = v.get('port')
-       res.append((host, port))
+       pubkey=PublicKey(a2b_base64(v['pubkey']))
+       res.append((host, port, pubkey))
    return res
 
 def getcfg():
@@ -252,22 +282,23 @@ def getcfg():
   return config
 
 def main(params=sys.argv):
+    global config
     config = getcfg()
+    config['key']=KeyPair.from_bytes(a2b_base64(config['key']))
 
     parser = argparse.ArgumentParser(description='tuokms cli'
     f"usage: {sys.argv[0]} -c <genkey|encrypt|decrypt|update>"
-    f"       {sys.argv[0]} -c genkey -t threshold -s server1:port server2:port ..."
+    f"       {sys.argv[0]} -c genkey -t threshold ..."
     f"       {sys.argv[0]} -c encrypt -k keyid <filetoencrypt >encryptedfile"
-    f"       {sys.argv[0]} -c decrypt -s server1:port ... serverN:port <filetodecrypt >decryptedfile"
-    f"       {sys.argv[0]} -c update -k keyid -s server1:port ... serverN:port <listoffilestoupdate")
+    f"       {sys.argv[0]} -c decrypt <filetodecrypt >decryptedfile"
+    f"       {sys.argv[0]} -c update -k keyid <listoffilestoupdate")
 
     parser.add_argument('-c', '--cmd', choices={"genkey", "encrypt", "decrypt", "update"})
-    parser.add_argument('-s', '--server', nargs="+")
     parser.add_argument('-t', '--threshold', type=int)
     parser.add_argument('-k', '--keyid')
     args = parser.parse_args()
 
-    servers=parse_servers(args.server, config)
+    servers=parse_servers(config)
 
     if args.cmd=="genkey":
         if args.threshold*2 + 1 < len(servers):

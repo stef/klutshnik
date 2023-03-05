@@ -14,8 +14,16 @@
 #include "thmult.h"
 #include "utils.h"
 #include "tuokms.h"
+#include <noise/protocol.h>
+
+#define MAX_MESSAGE_LEN 4096
 
 const int max_kids = 5;
+
+uint8_t key[32];
+NoiseCipherState *send_cipher = 0;
+NoiseCipherState *recv_cipher = 0;
+uint8_t client_pubkey[32];
 
 typedef enum {
   NoOp = 0,
@@ -25,12 +33,8 @@ typedef enum {
 } __attribute__ ((__packed__)) OpCode_t;
 
 typedef struct {
-  uint16_t size;
   uint8_t version;
   OpCode_t type;
-} __attribute__ ((__packed__)) MessageHeader_t;
-
-typedef struct {
   uint8_t index;
   uint8_t t;
   uint8_t n;
@@ -141,16 +145,65 @@ static int load(const TParams_t params, TOPRF_Share share[2], uint8_t commitment
   return 0;
 }
 
-static int get_params(const int fd, TParams_t *params) {
-  ssize_t len = recv(fd, (char*) params, sizeof(TParams_t), 0);
-  if(len==-1) {
-    perror("recv params failed");
-    return 1;
-  } else if(len != sizeof(TParams_t)) {
-    fail("invalid params");
+static int noise_send(const int fd, const void *msg, const size_t size) {
+  NoiseBuffer mbuf;
+  int err;
+  if(size>MAX_MESSAGE_LEN) {
+    fail("message too large: %ld", size);
+    return -1;
+  }
+  uint8_t message[MAX_MESSAGE_LEN + 2];
+  memcpy(message+2, msg, size);
+  noise_buffer_set_inout(mbuf, message + 2, size, sizeof(message) - 2);
+  err = noise_cipherstate_encrypt(send_cipher, &mbuf);
+  if (err != NOISE_ERROR_NONE) {
+    noise_perror("noise_send", err);
+    return -1;
+  }
+  message[0] = (uint8_t)(mbuf.size >> 8);
+  message[1] = (uint8_t)mbuf.size;
+  size_t len;
+  if((len = write(fd, message, mbuf.size+2)) != mbuf.size+2) {
+    fail("truncated noise_send: %ld instead of %ld", len, mbuf.size+2);
+    return -1;
+  }
+  return size;
+}
+
+static int noise_read(const int fd, void *msg, const size_t size) {
+  NoiseBuffer mbuf;
+  int err;
+  if(size>MAX_MESSAGE_LEN) {
+    fail("message too large: %ld", size);
+    return -1;
+  }
+  uint8_t message[MAX_MESSAGE_LEN + 2];
+
+  size_t len=read(fd, message, 2);
+  if(len==-1 || len!=2) {
+    perror("read size of msg failed");
+    return -1;
+  }
+  uint16_t msg_size = message[0] << 8 | message[1];
+  if(msg_size!=size+16) {
+    fail("message is bigger than buffer we got: %ld>%ld", msg_size, size+16);
+    return -1;
+  }
+  if(read(fd,message+2,msg_size)!=msg_size) {
+    fail("truncated message");
+    return -1;
+  }
+
+  /* Decrypt the incoming message */
+  noise_buffer_set_input(mbuf, message + 2, msg_size);
+  err = noise_cipherstate_decrypt(recv_cipher, &mbuf);
+  if (err != NOISE_ERROR_NONE) {
+    noise_perror("read", err);
     return 1;
   }
-  return 0;
+  memcpy(msg, mbuf.data, mbuf.size);
+
+  return mbuf.size;
 }
 
 static int dkg(const int fd, const TParams_t params,
@@ -166,7 +219,7 @@ static int dkg(const int fd, const TParams_t params,
     fail("dkg_start");
     return 1;
   }
-  len = send(fd,(char*)&dsresp,sizeof(dsresp),0);
+  len = noise_send(fd,(char*)&dsresp,sizeof(dsresp));
   if(len==-1) {
     fail("send dkg_start response");
     return 1;
@@ -179,7 +232,7 @@ static int dkg(const int fd, const TParams_t params,
   } __attribute__ ((__packed__)) dspeers;
 
   //fprintf(stderr, "expecting %ld bytes as peers response\n", sizeof(dspeers));
-  len = recv(fd, (char*) &dspeers, sizeof dspeers,0);
+  len = noise_read(fd, (char*) &dspeers, sizeof dspeers);
   if(len==-1) {
     perror("recv dkg_start dspeers failed");
     return 1;
@@ -214,9 +267,7 @@ static int dkg(const int fd, const TParams_t params,
   return 0;
 }
 
-static int dkg_handler(const int fd, const MessageHeader_t *header) {
-  TParams_t params;
-  if(get_params(fd, &params)) return 1;
+static int dkg_handler(const int fd, const TParams_t params) {
   info(0, &params, "dkg");
 
   uint8_t commitments[params.t][crypto_core_ristretto255_BYTES];
@@ -225,15 +276,12 @@ static int dkg_handler(const int fd, const MessageHeader_t *header) {
 
   if(save(params, share, sizeof commitments, (uint8_t*) commitments, 1)) return 1;
 
-  send(fd,&share, sizeof share,0);
+  noise_send(fd,&share, sizeof share);
 
   return 0;
 }
 
-static int evaluate(const int fd, const MessageHeader_t *header) {
-  // todo use size in header parameter for validation!
-  TParams_t params;
-  if(get_params(fd, &params)) return 1;
+static int evaluate(const int fd, const TParams_t params) {
   info(0, &params, "evaluate");
   ssize_t len;
 
@@ -246,7 +294,8 @@ static int evaluate(const int fd, const MessageHeader_t *header) {
     uint8_t verifier[crypto_core_ristretto255_BYTES];
   } __attribute__ ((__packed__)) eval_params;
 
-  len = recv(fd, (char*) &eval_params, sizeof eval_params,0);
+  len = noise_read(fd, (char*) &eval_params, sizeof eval_params);
+
   if(len==-1) {
     perror("recv evaluate params failed");
     return 1;
@@ -265,7 +314,7 @@ static int evaluate(const int fd, const MessageHeader_t *header) {
     fail("at tuokms_evaluate");
     return 1;
   }
-  len = send(fd,(char*)&resp,sizeof(resp),0);
+  len = noise_send(fd,(char*)&resp,sizeof(resp));
   if(len==-1) {
     fail("send eval response");
     return 1;
@@ -274,9 +323,7 @@ static int evaluate(const int fd, const MessageHeader_t *header) {
   return 0;
 }
 
-static int update(const int fd, const MessageHeader_t *header) {
-  TParams_t params;
-  if(get_params(fd, &params)) return 1;
+static int update(const int fd, const TParams_t params) {
   info(0, &params, "update");
   ssize_t len;
 
@@ -285,7 +332,7 @@ static int update(const int fd, const MessageHeader_t *header) {
   TOPRF_Share share_new[2];
   if(dkg(fd, params, commitments_new, share_new)) return 1;
 
-  send(fd,&share_new, sizeof share_new,0);
+  noise_send(fd,&share_new, sizeof share_new);
 
   // load old shares
   uint8_t commitments[params.t][crypto_core_ristretto255_BYTES];
@@ -296,7 +343,7 @@ static int update(const int fd, const MessageHeader_t *header) {
   uint8_t mulshares[params.n][sizeof(TOPRF_Share)];
   if(toprf_mpc_mul_start((uint8_t*)share, (uint8_t*)share_new, params.n, params.t, mulshares)) return 1;
 
-  len = send(fd,mulshares,sizeof(mulshares),0);
+  len = noise_send(fd,mulshares,sizeof(mulshares));
   if(len==-1) {
     fail("send mulshares");
     return 1;
@@ -304,7 +351,7 @@ static int update(const int fd, const MessageHeader_t *header) {
 
   // receive shares from others
   uint8_t shares[params.n][TOPRF_Share_BYTES];
-  len = recv(fd, (char*) &shares, sizeof shares,0);
+  len = noise_read(fd, (char*) &shares, sizeof shares);
   if(len==-1) {
     perror("recv evaluate tparams failed");
     return 1;
@@ -320,29 +367,131 @@ static int update(const int fd, const MessageHeader_t *header) {
 
   if(save(params, share, sizeof commitments, (uint8_t*) commitments, 0)) return 1;
 
-  send(fd,&share, sizeof(TOPRF_Share), 0);
+  noise_send(fd,&share, sizeof(TOPRF_Share));
+
+  return 0;
+}
+
+static int noise_setup(const int fd) {
+  const char protocol[] = "Noise_XK_25519_ChaChaPoly_BLAKE2b";
+  NoiseHandshakeState *handshake;
+  int err;
+  err = noise_handshakestate_new_by_name (&handshake, protocol, NOISE_ROLE_RESPONDER);
+  if (err != NOISE_ERROR_NONE) {
+    noise_perror(protocol, err);
+    return 1;
+  }
+
+  NoiseDHState *dh;
+  dh = noise_handshakestate_get_local_keypair_dh(handshake);
+  err = noise_dhstate_set_keypair_private(dh, key, 32);
+  if (err != NOISE_ERROR_NONE) {
+    noise_perror("set server private noise key", err);
+    noise_handshakestate_free(handshake);
+    return 1;
+  }
+  err = noise_handshakestate_start(handshake);
+  if (err != NOISE_ERROR_NONE) {
+    noise_perror("start handshake", err);
+    noise_handshakestate_free(handshake);
+    return 1;
+  }
+
+  uint8_t msg1[48];
+  if(read(fd,msg1,sizeof msg1)!=sizeof msg1) {
+    fail("failed to read msg1 in noise handshake");
+    noise_handshakestate_free(handshake);
+    return 1;
+  }
+
+  NoiseBuffer mbuf;
+  noise_buffer_set_input(mbuf, msg1, sizeof msg1);
+  err = noise_handshakestate_read_message(handshake, &mbuf, NULL);
+  if (err != NOISE_ERROR_NONE) {
+    noise_perror("read handshake msg1 from client", err);
+    noise_handshakestate_free(handshake);
+    return 1;
+  }
+
+  // server responds
+  uint8_t msg2[48];
+  noise_buffer_set_output(mbuf, msg2, sizeof(msg2));
+  err = noise_handshakestate_write_message(handshake, &mbuf, NULL);
+  if (err != NOISE_ERROR_NONE) {
+    noise_perror("write handshake msg2", err);
+    noise_handshakestate_free(handshake);
+    return 1;
+  }
+  if(sizeof msg2!=write(fd, msg2, sizeof msg2)) {
+    noise_perror("send handshake msg2", err);
+    noise_handshakestate_free(handshake);
+    return 1;
+  }
+
+  // wait for client reply
+  uint8_t msg3[64];
+  if(read(fd,msg3,sizeof msg3)!=sizeof msg3) {
+    fail("failed to recv msg3 in noise handshake");
+    noise_handshakestate_free(handshake);
+    return 1;
+  }
+
+  noise_buffer_set_input(mbuf, msg3, sizeof msg3);
+  err = noise_handshakestate_read_message(handshake, &mbuf, NULL);
+  if (err != NOISE_ERROR_NONE) {
+    noise_perror("read client handshake1", err);
+    noise_handshakestate_free(handshake);
+    return 1;
+  }
+
+  if (noise_handshakestate_get_action(handshake) != NOISE_ACTION_SPLIT) {
+    fail("noise protocol handshake failed\n");
+    noise_handshakestate_free(handshake);
+    return 1;
+  }
+
+  err = noise_handshakestate_split(handshake, &send_cipher, &recv_cipher);
+  if (err != NOISE_ERROR_NONE) {
+    noise_handshakestate_free(handshake);
+    noise_perror("split to start data transfer", err);
+    return 1;
+  }
+
+  dh = noise_handshakestate_get_remote_public_key_dh(handshake);
+  err=noise_dhstate_get_public_key(dh, client_pubkey, sizeof client_pubkey);
+  if (err != NOISE_ERROR_NONE) {
+    noise_perror("failed to get client pubkey", err);
+    noise_handshakestate_free(handshake);
+    return 1;
+  }
+  // todo authorize pubkey
+  dump(client_pubkey, sizeof client_pubkey, "client pubkey: ");
+
+  noise_handshakestate_free(handshake);
+  handshake = 0;
 
   return 0;
 }
 
 static int handler(const int fd) {
-  MessageHeader_t header;
-  ssize_t len = recv(fd, (char*) &header, sizeof header, 0);
+  if(noise_setup(fd)) return 1;
+  TParams_t params;
+  ssize_t len = noise_read(fd, (char*) &params, sizeof params);
   if(len==-1) {
     perror("recv failed");
-  } else if(len == sizeof header) {
+  } else if(len == sizeof params) {
 
-    switch(header.type) {
+    switch(params.type) {
     case(DKG): {
-      dkg_handler(fd,&header);
+      dkg_handler(fd,params);
       break;
     }
     case(Evaluate): {
-      evaluate(fd,&header);
+      evaluate(fd,params);
       break;
     }
     case(TUOKMS_Update): {
-      update(fd,&header);
+      update(fd,params);
       break;
     }
     default:;
@@ -430,15 +579,28 @@ void mainloop(const int port) {
 }
 
 void usage(const char** argv) {
-  printf("%s port\n", argv[0]);
+  printf("%s port privkey\n", argv[0]);
   exit(1);
 }
 
 int main(const int argc, const char** argv) {
-  if(argc<2) usage(argv);
+  if(argc<3) usage(argv);
 
   const int port=atoi(argv[1]);
   info(0, NULL, "starting on port %d", port);
+
+  if (noise_init() != NOISE_ERROR_NONE) {
+    fail("Noise initialization");
+    return 1;
+  }
+
+  int fd = open(argv[2],'r');
+  if(read(fd,key,32) != 32) {
+    fail("reading private key");
+    return 1;
+  };
+  close(fd);
+
   mainloop(port);
   return 0;
 }
