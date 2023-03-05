@@ -6,7 +6,6 @@
 #include "common.h"
 #include "utils.h"
 
-const int debug=1;
 
 int uokms_blind(const uint8_t w[crypto_core_ristretto255_BYTES],
                 uint8_t r[crypto_core_ristretto255_SCALARBYTES],
@@ -81,8 +80,10 @@ void uokms_update_kc(uint8_t kc[crypto_core_ristretto255_SCALARBYTES],
   memcpy(kc, kc_new, sizeof kc_new);
 }
 
-
+#ifdef UNIT_TEST
 int main(void) {
+  const int debug=1;
+  
   // setup
   // client key
   uint8_t kc[crypto_core_ristretto255_SCALARBYTES];
@@ -156,3 +157,4 @@ int main(void) {
 
   return 0;
 }
+#endif //UNIT_TEST
