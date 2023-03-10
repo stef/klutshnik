@@ -13,7 +13,7 @@ asan: all
 libkms.so: tuokms.c uokms.c thmult.c matrices.c common.c utils.c
 	$(CC) -shared $(CFLAGS) -Wl,-soname,libkms.so -o libkms.$(SOEXT) $^ $(LDFLAGS)
 
-kms: server.c
+kms: server.c noise.c
 	gcc $(CFLAGS) -o $@ $^ $(LDFLAGS) -L. -lkms
 
 tuokms: tuokms.c thmult.c matrices.c common.c utils.c
