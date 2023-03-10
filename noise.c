@@ -73,7 +73,7 @@ int noise_read(const int fd, void *msg, const size_t size) {
   return mbuf.size;
 }
 
-int noise_setup(const int fd) {
+int noise_setup(const int fd, uint8_t client_pubkey[32]) {
   const char protocol[] = "Noise_XK_25519_ChaChaPoly_BLAKE2b";
   NoiseHandshakeState *handshake;
   int err;
@@ -159,15 +159,13 @@ int noise_setup(const int fd) {
   }
 
   dh = noise_handshakestate_get_remote_public_key_dh(handshake);
-  uint8_t client_pubkey[32]; // todo return to caller
-  err=noise_dhstate_get_public_key(dh, client_pubkey, sizeof client_pubkey);
+  err=noise_dhstate_get_public_key(dh, client_pubkey, 32); // 32 ugh!
   if (err != NOISE_ERROR_NONE) {
     noise_perror("failed to get client pubkey", err);
     noise_handshakestate_free(handshake);
     return 1;
   }
-  // todo authorize pubkey
-  dump(client_pubkey, sizeof client_pubkey, "client pubkey: ");
+  dump(client_pubkey, 32, "client pubkey: "); // 32 ugh!
 
   noise_handshakestate_free(handshake);
   handshake = 0;

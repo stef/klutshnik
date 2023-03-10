@@ -306,7 +306,9 @@ static int update(const int fd, const TParams_t params) {
 }
 
 static int handler(const int fd) {
-  if(noise_setup(fd)) return 1;
+  uint8_t client_pubkey[32];
+  if(noise_setup(fd, client_pubkey)) return 1;
+  // todo authorize pubkey
   TParams_t params;
   ssize_t len = noise_read(fd, (char*) &params, sizeof params);
   if(len==-1) {
