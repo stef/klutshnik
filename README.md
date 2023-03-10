@@ -197,11 +197,4 @@ structure:
 ```
 1 byte index
 32 bytes share
-1 byte index
-32 bytes commitment for share
-t*32 bytes commitments
 ```
-
-TODO the last element containing threshold commitments is not needed
-and will be removed in the futures. As is possibly the commitment for
-the share. This needs evaluation though.
