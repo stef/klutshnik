@@ -63,7 +63,7 @@ static void info(const int level, const TParams_t *params, const char* msg, ...)
   printf("\n");
 }
 
-static int save(const TParams_t params, const TOPRF_Share share[2], const size_t clen, const uint8_t commitments[clen], const int create) {
+static int save(const TParams_t params, const TOPRF_Share *share, const int create) {
   char fname[sizeof("shares/")+(sizeof params.keyid)*2 + 3/*index*/];
   char *ptr = fname;
   memcpy(ptr,"shares/",7);
@@ -87,21 +87,16 @@ static int save(const TParams_t params, const TOPRF_Share share[2], const size_t
     close(fd);
     return(1);
   }
-  if(write(fd, share, sizeof(TOPRF_Share)*2) != sizeof(TOPRF_Share)*2) {
+  if(write(fd, share, sizeof(TOPRF_Share)) != sizeof(TOPRF_Share)) {
     perror("failed to write share");
     close(fd);
     return 1;
   };
-  if(write(fd, commitments, clen) != clen) {
-    perror("failed to write commitments");
-    close(fd);
-    return 1;
-  }
   close(fd);
   return 0;
 }
 
-static int load(const TParams_t params, TOPRF_Share share[2], uint8_t commitments[params.t][crypto_core_ristretto255_BYTES]) {
+static int load(const TParams_t params, TOPRF_Share *share) {
   char fname[sizeof("shares/")+(sizeof params.keyid)*2 + 3/*index*/];
   char *ptr = fname;
   memcpy(ptr,"shares/",7);
@@ -120,28 +115,20 @@ static int load(const TParams_t params, TOPRF_Share share[2], uint8_t commitment
     perror("couldn't stat share");
     return 1;
   };
-  const ssize_t slen=(sizeof(TOPRF_Share)*2)+(params.t*crypto_core_ristretto255_BYTES);
-  if(st.st_size!= slen) {
-    fprintf(stderr, "invalid share size: %ld, expected: %ld", st.st_size, slen);
+  if(st.st_size!= sizeof(TOPRF_Share)) {
+    fprintf(stderr, "invalid share size: %ld, expected: %ld", st.st_size, sizeof(TOPRF_Share));
   }
-  if(read(fd, share, sizeof(TOPRF_Share)*2) != sizeof(TOPRF_Share)*2) {
+  if(read(fd, share, sizeof(TOPRF_Share)) != sizeof(TOPRF_Share)) {
     perror("failed to write share");
     close(fd);
     return 1;
   };
-  const size_t clen=params.t*crypto_core_ristretto255_BYTES;
-  if(read(fd, commitments, clen) != clen) {
-    perror("failed to read commitments");
-    close(fd);
-    return 1;
-  }
   close(fd);
   return 0;
 }
 
 static int dkg(const int fd, const TParams_t params,
-               uint8_t commitments[params.t][crypto_core_ristretto255_BYTES],
-               TOPRF_Share share[2]) {
+               TOPRF_Share *share) {
   ssize_t len;
   struct {
     uint8_t commitments[params.t][crypto_core_ristretto255_BYTES];
@@ -192,22 +179,20 @@ static int dkg(const int fd, const TParams_t params,
   for(int i=0;i<params.n;i++) qual[i]=i+1; //everyone qualifies
   qual[params.n]=0;
 
-  share[0].index=params.index;
-  share[1].index=params.index;
+  share->index=params.index;
   // finalize dkg
-  dkg_finish(params.n,qual,dspeers.shares,params.index,&share[0],&share[1]);
-  memcpy(commitments, dsresp.commitments, sizeof dsresp.commitments);
+  TOPRF_Share delme; // ignore the commitment share
+  dkg_finish(params.n,qual,dspeers.shares,params.index,share,&delme);
   return 0;
 }
 
 static int dkg_handler(const int fd, const TParams_t params) {
   info(0, &params, "dkg");
 
-  uint8_t commitments[params.t][crypto_core_ristretto255_BYTES];
-  TOPRF_Share share[2];
-  if(dkg(fd, params, commitments, share)) return 1;
+  TOPRF_Share share;
+  if(dkg(fd, params, &share)) return 1;
 
-  if(save(params, share, sizeof commitments, (uint8_t*) commitments, 1)) return 1;
+  if(save(params, &share, 1)) return 1;
 
   noise_send(fd,&share, sizeof share);
 
@@ -218,9 +203,8 @@ static int evaluate(const int fd, const TParams_t params) {
   info(0, &params, "evaluate");
   ssize_t len;
 
-  uint8_t commitments[params.t][crypto_core_ristretto255_BYTES];
-  TOPRF_Share share[2];
-  if(load(params, share, commitments)) return 1;
+  TOPRF_Share share;
+  if(load(params, &share)) return 1;
 
   struct {
     uint8_t alpha[crypto_core_ristretto255_BYTES];
@@ -241,9 +225,9 @@ static int evaluate(const int fd, const TParams_t params) {
     TOPRF_Part beta;
     TOPRF_Part verifier;
   } resp;
-  resp.beta.index=share[0].index;
-  resp.verifier.index=share[0].index;
-  if(tuokms_evaluate(share[0].value, eval_params.alpha, eval_params.verifier, resp.beta.value, resp.verifier.value)) {
+  resp.beta.index=share.index;
+  resp.verifier.index=share.index;
+  if(tuokms_evaluate(share.value, eval_params.alpha, eval_params.verifier, resp.beta.value, resp.verifier.value)) {
     fail("at tuokms_evaluate");
     return 1;
   }
@@ -261,20 +245,18 @@ static int update(const int fd, const TParams_t params) {
   ssize_t len;
 
   // generate new shares
-  uint8_t commitments_new[params.t][crypto_core_ristretto255_BYTES];
-  TOPRF_Share share_new[2];
-  if(dkg(fd, params, commitments_new, share_new)) return 1;
+  TOPRF_Share share_new;
+  if(dkg(fd, params, &share_new)) return 1;
 
   noise_send(fd,&share_new, sizeof share_new);
 
   // load old shares
-  uint8_t commitments[params.t][crypto_core_ristretto255_BYTES];
-  TOPRF_Share share[2];
-  if(load(params, share, commitments)) return 1;
+  TOPRF_Share share;
+  if(load(params, &share)) return 1;
 
   // multiply shares
   uint8_t mulshares[params.n][sizeof(TOPRF_Share)];
-  if(toprf_mpc_mul_start((uint8_t*)share, (uint8_t*)share_new, params.n, params.t, mulshares)) return 1;
+  if(toprf_mpc_mul_start((uint8_t*)&share, (uint8_t*)&share_new, params.n, params.t, mulshares)) return 1;
 
   len = noise_send(fd,mulshares,sizeof(mulshares));
   if(len==-1) {
@@ -296,9 +278,9 @@ static int update(const int fd, const TParams_t params) {
   // todo figure out where to get indexes from
   uint8_t indexes[params.n];
   for(unsigned i=0; i<params.n; i++) indexes[i]=i+1;
-  toprf_mpc_mul_finish(params.n, indexes, params.index, shares, (uint8_t*)&share[0]);
+  toprf_mpc_mul_finish(params.n, indexes, params.index, shares, (uint8_t*)&share);
 
-  if(save(params, share, sizeof commitments, (uint8_t*) commitments, 0)) return 1;
+  if(save(params, &share, 0)) return 1;
 
   noise_send(fd,&share, sizeof(TOPRF_Share));
 
