@@ -227,6 +227,13 @@ Within this, the DKG is based on
     "Secure Distributed Key Generation for Discrete-Log Based Cryptosystems"
     by Rosario Gennaro, Stanislaw Jarecki, Hugo Krawczyk, Tal Rabin
 
+The key-update is based on:
+
+    Fig. 2 from "Simplified VSS and fact-track multiparty computations
+    with applications to threshold cryptography"
+    by R. Gennaro, M. O. Rabin, and T. Rabin.
+
+
 The Klutshnik servers use macaroons for authorization of request,
 based on: https://research.google/pubs/pub41892/
 
