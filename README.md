@@ -1,3 +1,11 @@
+# Klutshnik
+
+Hello my name is Klyoovtuokmshnik, Styepanovich Klyoovtuokmshnik but
+my friends call me "klutshnik" (Narrator: let me interject for a
+moment, What you are referring to as Klutshnik, is in fact,
+GNU/Klutshnik, or as I've recently taken to calling it, GNU plus
+Klutshnik)
+
 # WARNING
 
 WARNING! this is very early alpha-grade proof of concept, it is
@@ -99,8 +107,10 @@ make
 In order to test also the update of keys, a minimum of
 `2*(threshold-1)+1` shares is necessary. Hence the minimim setup
 requires 5 servers (possibly the number is 3 actually, this needs
-testing/confirmation). for them we need to create each their own
-keypair using:
+testing/confirmation). If you don't have that many devices to run KMS'
+on, just run a couple of them on the same device.
+
+For each kms we need to create each their own keypair using:
 
 ```
 for i in $(seq 0 4); do ./genkey.py ksm$i.key; done
@@ -198,3 +208,42 @@ structure:
 1 byte index
 32 bytes share
 ```
+
+# References
+
+The main functionality is based on the UOKMS construction of the
+https://eprint.iacr.org/2019/1275
+
+    "Updatable Oblivious Key Management for Storage Systems"
+    by Stanislaw Jarecki, Hugo Krawczyk, and Jason Resch
+
+Within this, the DKG is based on
+
+    "Secure Distributed Key Generation for Discrete-Log Based Cryptosystems"
+    by Rosario Gennaro, Stanislaw Jarecki, Hugo Krawczyk, Tal Rabin
+
+The Klutshnik servers use macaroons for authorization of request,
+based on: https://research.google/pubs/pub41892/
+
+    "Macaroons: Cookies with Contextual Caveats for Decentralized Authorization in the Cloud"
+    by Arnar Birgisson Joe Gibbs Politz Úlfar Erlingsson Ankur Taly Michael Vrable Mark Lentczner
+
+The opaque-store is based on https://eprint.iacr.org/2018/163
+
+    "OPAQUE: An Asymmetric PAKE Protocol Secure Against Pre-Computation Attacks"
+    by Stanislaw Jarecki, Hugo Krawczyk, and Jiayu Xu
+
+All communication between the client and the Klutshnik servers and the
+opaque-store are protected by Noise XK handshake patterns:
+https://noiseprotocol.org/noise.html
+https://noiseexplorer.com/patterns/XK/
+
+provided by noise-c: https://github.com/rweather/noise-c and
+dissononce: https://github.com/tgalal/dissononce
+
+The files are encrypted using `crypto_secretbox()` by libsodium
+https://github.com/jedisct1/libsodium, using the STREAM construction
+https://eprint.iacr.org/2015/189:
+
+    "Online Authenticated-Encryption and its Nonce-Reuse Misuse-Resistance"
+    by Viet Tung Hoang, Reza Reyhanitabar, Phillip Rogaway, and Damian Vizár
