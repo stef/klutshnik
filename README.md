@@ -52,7 +52,7 @@ which:
 > en/decryption key] is wrong (either due to computing error or to
 > adversarial action)
 
-# dependencies
+# Dependencies
 
 This code depends on liboprf[1], libsodium[2], pysodium[3], noise-c[4] and dissononce[5].
 
@@ -60,11 +60,15 @@ It is to be expected that the dependencies noise-c and dissononce will
 be eliminated by specific implementation of the Noise XK handshake
 using libsodium.
 
+Furthermore the authentication tokens will be automatically stored and
+retrieved from an opaque-store[6].
+
 [1] https://github.com/stef/liboprf/
 [2] https://github.com/jedisct1/libsodium
 [3] https://github.com/stef/pysodium
 [4] https://github.com/stef/pysodium
 [5] https://github.com/tgalal/dissononce
+[6] https://github.com/stef/opaque-store/
 
 # Building
 
@@ -86,13 +90,13 @@ cp liboprf.so /usr/lib # or wherever your OS stores libs
 cd ..
 ```
 
-## build tuokms
+## build Klutshnik
 
 ```
 # in directory $buildroot
 
-git clone https://github.com/stef/tuokms/
-cd tuokms
+git clone https://github.com/stef/klutshnik
+cd klutshnik
 git clone https://github.com/rweather/noise-c
 cd noise-c
 ./autogen.sh
@@ -107,17 +111,18 @@ make
 In order to test also the update of keys, a minimum of
 `2*(threshold-1)+1` shares is necessary. Hence the minimim setup
 requires 5 servers (possibly the number is 3 actually, this needs
-testing/confirmation). If you don't have that many devices to run KMS'
-on, just run a couple of them on the same device.
+testing/confirmation). If you don't have that many devices to run
+klutshnik servers on, just run a couple of them on the same device.
 
-For each kms we need to create each their own keypair using:
+For each klutshnik server we need to create each their own keypair
+using:
 
 ```
 for i in $(seq 0 4); do ./genkey.py ksm$i.key; done
 ```
 
 The public keys printed to standard output from above must be set
-accordingly in the file `tuokms.cfg`
+accordingly in the file `klutshnik.cfg`
 
 We also need to create a client key:
 
@@ -128,7 +133,7 @@ rm client.tmp
 ```
 
 Some directories need to be created. The default `keys/` can be
-changed in `tuokms.cfg` is used by the client to store its public
+changed in `klutshnik.cfg` is used by the client to store its public
 keys:
 
 ```
@@ -155,13 +160,11 @@ You can now try to run the commands from the:
 keyid e2d0ee2a082920dd02822737ac7267b4
 % echo "hello world" | ./client.py -c encrypt -k e2d0ee2a082920dd02822737ac7267b4 >/tmp/encrypted
 % xxd /tmp/encrypted
-00000000: e2d0 ee2a 0829 20dd 0282 2737 ac72 67b4  ...*.) ...'7.rg.
-00000010: b46f 1534 e7a1 118c 0653 0d5c f4aa 4e77  .o.4.....S.\..Nw
-00000020: 98d5 1a08 ff56 78bc 75ed 0f89 9dec e07a  .....Vx.u......z
-00000030: a4a7 9353 b5f3 f99b c9df 1b66 57b8 7758  ...S.......fW.wX
-00000040: a177 9f7c ca38 b93c 29b9 eadb f7b6 5adc  .w.|.8.<).....Z.
-00000050: 48b3 c23c 1fd7 775d 5db3 2502 4711 03a3  H..<..w]].%.G...
-00000060: c561 85                                  .a.
+00000000: bd9c 7f46 7eb4 1469 900d e1d4 6ed1 28bc  ...F~..i....n.(.
+00000010: 3a13 6f99 b648 3a4d 1076 8629 68b2 1a70  :.o..H:M.v.)h..p
+00000020: 50de 9ca9 5af1 481a 9f36 1b8e 664b ee17  P...Z.H..6..fK..
+00000030: 66d6 0cc8 6112 3e6e c234 4f80 5e08 0acd  f...a.>n.4O.^...
+00000040: 100d 7c72 3ad8 46d3 4a82 afb0            ..|r:.F.J...
 % ./client.py -c decrypt </tmp/encrypted
 hello world%
 % echo -n /tmp/encrypted | ./client.py -c update -k e2d0ee2a082920dd02822737ac7267b4
@@ -184,11 +187,11 @@ Encrypted files have the following structure:
 ```
 16 bytes keyid
 32 bytes w value
-24 bytes nonce
-n bytes ciphertext (chacha20)
-16 bytes MAC (poly1305)
+12 byte nonce-half
+every 64KB
+    64 kBytes ciphertext (chacha20)
+    16 bytes MAC (poly1305)
 ```
-
 You can see in the above example session, that after key-update only
 the w value is changed, nothing else.
 

@@ -34,7 +34,7 @@ def split_by_n(obj, n):
 
 def getpwd(title):
     proc=subprocess.Popen(['/usr/bin/pinentry', '-g'], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    out, err = proc.communicate(input=('SETTITLE vtuokms password prompt\nSETDESC %s\nSETPROMPT opaque-store password\ngetpin\n' % (title)).encode())
+    out, err = proc.communicate(input=('SETTITLE klutshnik password prompt\nSETDESC %s\nSETPROMPT opaque-store password\ngetpin\n' % (title)).encode())
     if proc.returncode == 0:
         for line in out.split(b'\n'):
             if line.startswith(b"D "): return line[2:]
@@ -265,12 +265,12 @@ def parse_servers(config):
 def getcfg():
   paths=[
       # read global cfg
-      '/etc/tuokms/config',
+      '/etc/klutshnik/config',
       # update with per-user configs
-      os.path.expanduser("~/.tuokmsrc"),
+      os.path.expanduser("~/.klutshnikrc"),
       # over-ride with local directory config
-      os.path.expanduser("~/.config/tuokms/config"),
-      os.path.expanduser("tuokms.cfg")
+      os.path.expanduser("~/.config/klutshnik/config"),
+      os.path.expanduser("klutshnik.cfg")
   ]
   config = dict()
   for path in paths:
@@ -299,7 +299,7 @@ def main(params=sys.argv):
     with open(config['key'],'rb') as fd:
         config['key']=KeyPair.from_bytes(a2b_base64(fd.read()))
 
-    parser = argparse.ArgumentParser(description='tuokms cli'
+    parser = argparse.ArgumentParser(description='klutshnik cli'
     f"usage: {sys.argv[0]} -c <genkey|encrypt|decrypt|update>"
     f"       {sys.argv[0]} -c genkey -t threshold ..."
     f"       {sys.argv[0]} -c encrypt -k keyid <filetoencrypt >encryptedfile"
