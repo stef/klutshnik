@@ -5,12 +5,12 @@
 
 import os, io, sys, socket, struct, select
 import ctypes, ctypes.util, tomllib
-import pysodium, argparse
-from binascii import unhexlify, a2b_base64
-from dissononce.extras.meta.protocol.factory import NoiseProtocolFactory
-from dissononce.processing.handshakepatterns.interactive.XK import XKHandshakePattern
+import pysodium, argparse, subprocess
+from binascii import unhexlify, a2b_base64, b2a_base64
 from dissononce.dh.x25519.keypair import KeyPair
 from dissononce.dh.x25519.public import PublicKey
+from noiseclient import NoiseWrapper
+from opaquestore import opaquestore
 
 kmslib = ctypes.cdll.LoadLibrary(ctypes.util.find_library('kms') or
                                  ctypes.util.find_library('libkms.so') or
@@ -28,65 +28,55 @@ KEYID_SIZE = 16
 
 config = None
 
-
-class NoiseWrapper():
-   def __init__(self, fd, pubkey):
-      global config
-      self.fd = fd
-      protocol = NoiseProtocolFactory().get_noise_protocol('Noise_XK_25519_ChaChaPoly_BLAKE2b')
-      handshakestate = protocol.create_handshakestate()
-
-      # initialize handshakestate objects
-      handshakestate.initialize(XKHandshakePattern(), True, b'', s=config['key'], rs=pubkey)
-
-      # step 1
-      message_buffer = bytearray()
-      handshakestate.write_message(b'', message_buffer)
-
-      fd.sendall(message_buffer)
-
-      # step 2
-      message_buffer = fd.recv(48)
-      handshakestate.read_message(bytes(message_buffer), bytearray())
-
-      # step 3
-      message_buffer = bytearray()
-      self.state = handshakestate.write_message(b'', message_buffer)
-      fd.sendall(message_buffer)
-
-   def sendall(self, pkt):
-      ct = self.state[0].encrypt_with_ad(b'', pkt)
-      msg = struct.pack(">H", len(ct)) + ct
-      self.fd.sendall(msg)
-
-   def read_pkt(self,size):
-      res = []
-      read = 0
-      plen = self.fd.recv(2)
-      if len(plen)!=2:
-          print("plen: ", plen)
-          raise ValueError
-      plen = struct.unpack(">H", plen)[0]
-      while read<plen or len(res[-1])==0:
-        res.append(self.fd.recv(plen-read))
-        read+=len(res[-1])
-      return self.state[1].decrypt_with_ad(b'', b''.join(res))
-
 def split_by_n(obj, n):
   # src https://stackoverflow.com/questions/9475241/split-string-every-nth-character
   return [obj[i:i+n] for i in range(0, len(obj), n)]
 
+def getpwd(title):
+    proc=subprocess.Popen(['/usr/bin/pinentry', '-g'], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    out, err = proc.communicate(input=('SETTITLE vtuokms password prompt\nSETDESC %s\nSETPROMPT opaque-store password\ngetpin\n' % (title)).encode())
+    if proc.returncode == 0:
+        for line in out.split(b'\n'):
+            if line.startswith(b"D "): return line[2:]
+
+def getauthkey(op, keyid):
+   cfg = config['opaque-storage']
+   if op == DKG:
+      keyid = b'unbound'
+   keyid=pysodium.crypto_generichash(cfg['username'].encode('utf8') + keyid)
+   pwd = getpwd("getting auth token from opaque-store password")
+   s = NoiseWrapper.connect(cfg['address'], cfg['port'], cfg['noise_key'], cfg['server_pubkey'])
+   return opaquestore.get(s, pwd, keyid)
+
+def setauthkey(keyid, token):
+   cfg = config['opaque-storage']
+   keyid=pysodium.crypto_generichash(cfg['username'].encode('utf8') + keyid)
+   pwd = getpwd("saving auth token to opaque-store password")
+   opaquestore.test_pwd(pwd)
+   s = NoiseWrapper.connect(cfg['address'], cfg['port'], cfg['noise_key'], cfg['server_pubkey'])
+   opaquestore.create(s, pwd, keyid, token)
+
 def connect(servers, op, threshold, n, keyid):
+   global config
+   if 'authkey' in config:
+       authkey = config['authkey']
+   else:
+       authkey = getauthkey(op, keyid)
+
    conns = []
    for host,port,pubkey in servers:
        fd = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
        fd.settimeout(15)
        fd.connect((host, port))
-       noised =NoiseWrapper(fd, pubkey)
+       noised =NoiseWrapper(fd, config['key'], pubkey)
        conns.append(noised)
 
    for index,c in enumerate(conns):
       msg = b"%c%c%c%c%c%s" % (VERSION, op, index+1, threshold, n, keyid)
+      c.sendall(msg)
+
+   for c in conns:
+      msg = authkey
       c.sendall(msg)
 
    return conns
@@ -123,6 +113,11 @@ def dkg(servers,threshold):
    shares = b''.join(oks[i] for i in range(n))
    yc = ctypes.create_string_buffer(pysodium.crypto_core_ristretto255_BYTES)
    kmslib.tuokms_pubkey(n, threshold, shares, yc)
+
+   authtoken = conns[0].read_pkt(0)
+   setauthkey(keyid,authtoken)
+   print("authtoken for new key: ", b2a_base64(authtoken).decode('utf8').strip())
+
    return yc.raw, keyid
 
 def encrypt(plaintext, yc):
@@ -130,6 +125,9 @@ def encrypt(plaintext, yc):
    ciphertext=ctypes.create_string_buffer(len(plaintext)+pysodium.crypto_secretbox_NONCEBYTES+pysodium.crypto_secretbox_MACBYTES)
    kmslib.uokms_encrypt(yc, plaintext, len(plaintext), w, ciphertext)
    return w.raw, ciphertext.raw
+
+def stream_encrypt(yc):
+   kmslib.uokms_stream_encrypt(yc, 0, 1)
 
 def blind(w):
    r = ctypes.create_string_buffer(pysodium.crypto_core_ristretto255_SCALARBYTES)
@@ -152,7 +150,10 @@ def tuokms_decrypt(ct, r, c, d, pubkey, beta, verifier_beta):
    if(kmslib.tuokms_decrypt(ct, len(ct), r, c, d, pubkey, beta, verifier_beta, pt)): raise ValueError
    return pt.raw
 
-def decrypt(w,ct,pubkey,servers,threshold,keyid):
+def tuokms_stream_decrypt(w, r, c, d, pubkey, beta, verifier_beta):
+   if(kmslib.tuokms_stream_decrypt(0, 1, w, r, c, d, pubkey, beta, verifier_beta)): raise ValueError
+
+def decrypt(w,pubkey,servers,threshold,keyid):
    # first blind w
    r,c,d,a,v = blind(w)
    # send to servers
@@ -173,7 +174,7 @@ def decrypt(w,ct,pubkey,servers,threshold,keyid):
    beta = thresholdmult(threshold, xresps)
    beta_verifier = thresholdmult(threshold, vresps)
 
-   return tuokms_decrypt(ct, r, c, d, pubkey, beta, beta_verifier)
+   return tuokms_stream_decrypt(w, r, c, d, pubkey, beta, beta_verifier)
 
 def reconstruct(threshold, shares):
    v = ctypes.create_string_buffer(pysodium.crypto_core_ristretto255_SCALARBYTES)
@@ -279,6 +280,16 @@ def getcfg():
     except FileNotFoundError:
         continue
     config.update(data)
+
+  if 'opaque-storage' not in config:
+      if 'authkey' not in config:
+          raise ValueError("no opaque-storage and no authkey in config file")
+      config['authkey']=a2b_base64(config['authkey']+'==')
+      return config
+
+  config['opaque-storage']['noise_key']=KeyPair.from_bytes(a2b_base64(config['opaque-storage']['noise_key']+'=='))
+  config['opaque-storage']['server_pubkey']=PublicKey(a2b_base64(config['opaque-storage']['server_pubkey']+'=='))
+  opaquestore.config = config['opaque-storage']
   return config
 
 def main(params=sys.argv):
@@ -295,7 +306,7 @@ def main(params=sys.argv):
     f"       {sys.argv[0]} -c decrypt <filetodecrypt >decryptedfile"
     f"       {sys.argv[0]} -c update -k keyid <listoffilestoupdate")
 
-    parser.add_argument('-c', '--cmd', choices={"genkey", "encrypt", "decrypt", "update"})
+    parser.add_argument('-c', '--cmd', choices={"genkey", "encrypt", "decrypt", "update", 'authkey'})
     parser.add_argument('-t', '--threshold', type=int)
     parser.add_argument('-k', '--keyid')
     args = parser.parse_args()
@@ -313,17 +324,14 @@ def main(params=sys.argv):
 
     elif args.cmd=="encrypt":
         pubkey, _ = loadkey(args.keyid)
-        w, ct = encrypt(b"hello world", pubkey)
-        sys.stdout.buffer.write(unhexlify(args.keyid))
-        sys.stdout.buffer.write(w)
-        sys.stdout.buffer.write(ct)
+        os.write(1, unhexlify(args.keyid))
+        stream_encrypt(pubkey)
 
     elif args.cmd=="decrypt":
-        keyid = sys.stdin.buffer.read(KEYID_SIZE)
-        w = sys.stdin.buffer.read(pysodium.crypto_core_ristretto255_BYTES)
-        ct = sys.stdin.buffer.read()
+        keyid = os.read(0, KEYID_SIZE)
+        w = os.read(0, pysodium.crypto_core_ristretto255_BYTES)
         pubkey, threshold = loadkey(keyid.hex())
-        sys.stdout.buffer.write(decrypt(w, ct, pubkey, servers, threshold, keyid))
+        decrypt(w, pubkey, servers, threshold, keyid)
 
     elif args.cmd=="update":
         _, threshold = loadkey(args.keyid)
@@ -339,6 +347,10 @@ def main(params=sys.argv):
                 w = update_w(delta, w)
                 fd.seek(-pysodium.crypto_core_ristretto255_BYTES,io.SEEK_CUR)
                 fd.write(w)
+    elif args.cmd=="authkey":
+        token = a2b_base64(sys.stdin.buffer.readline().rstrip(b'\n')+b'==')
+        setauthkey(b'unbound', token)
+
     else:
         parser.print_help()
         usage()

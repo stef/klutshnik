@@ -10,10 +10,10 @@ asan: CFLAGS=-fsanitize=address -static-libasan -g -march=native -Wall -O2 -g -f
 asan: LDFLAGS+= -fsanitize=address -static-libasan
 asan: all
 
-libkms.so: tuokms.c uokms.c thmult.c matrices.c common.c utils.c
+libkms.so: tuokms.c uokms.c thmult.c matrices.c common.c utils.c streamcrypt.c
 	$(CC) -shared $(CFLAGS) -Wl,-soname,libkms.so -o libkms.$(SOEXT) $^ $(LDFLAGS)
 
-kms: server.c noise.c
+kms: server.c noise.c macaroon.c
 	gcc $(CFLAGS) -o $@ $^ $(LDFLAGS) -L. -lkms
 
 tuokms: tuokms.c thmult.c matrices.c common.c utils.c

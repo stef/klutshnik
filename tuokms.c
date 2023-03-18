@@ -8,6 +8,7 @@
 #include "toprf.h"
 #include "thmult.h"
 #include "utils.h"
+#include "streamcrypt.h"
 
 const int debug=1;
 
@@ -172,14 +173,13 @@ int tuokms_evaluate(const uint8_t kc[crypto_core_ristretto255_SCALARBYTES],
   return 0;
 }
 
-int tuokms_decrypt(const uint8_t *ciphertext, const size_t ct_len,
-                  const uint8_t r[crypto_core_ristretto255_SCALARBYTES],
-                  const uint8_t c[crypto_core_ristretto255_SCALARBYTES],
-                  const uint8_t d[crypto_core_ristretto255_SCALARBYTES],
-                  const uint8_t yc[crypto_core_ristretto255_BYTES],
-                  const uint8_t beta[crypto_core_ristretto255_BYTES],
-                  const uint8_t verifier_beta[crypto_core_ristretto255_BYTES],
-                  uint8_t *plaintext) {
+int tuokms_decrypt_get_dek(const uint8_t r[crypto_core_ristretto255_SCALARBYTES],
+                           const uint8_t c[crypto_core_ristretto255_SCALARBYTES],
+                           const uint8_t d[crypto_core_ristretto255_SCALARBYTES],
+                           const uint8_t yc[crypto_core_ristretto255_BYTES],
+                           const uint8_t beta[crypto_core_ristretto255_BYTES],
+                           const uint8_t verifier_beta[crypto_core_ristretto255_BYTES],
+                           uint8_t dek[crypto_secretbox_KEYBYTES]) {
   // check if beta is a valid point
   if(!crypto_core_ristretto255_is_valid_point(beta)) {
     fail("invalid beta");
@@ -228,10 +228,48 @@ int tuokms_decrypt(const uint8_t *ciphertext, const size_t ct_len,
   }
 
   // H(beta * 1/r)
+  crypto_generichash(dek, crypto_secretbox_KEYBYTES, gk, sizeof gk, NULL, 0);
+  return 0;
+}
+
+int tuokms_decrypt(const uint8_t *ciphertext, const size_t ct_len,
+                   const uint8_t r[crypto_core_ristretto255_SCALARBYTES],
+                   const uint8_t c[crypto_core_ristretto255_SCALARBYTES],
+                   const uint8_t d[crypto_core_ristretto255_SCALARBYTES],
+                   const uint8_t yc[crypto_core_ristretto255_BYTES],
+                   const uint8_t beta[crypto_core_ristretto255_BYTES],
+                   const uint8_t verifier_beta[crypto_core_ristretto255_BYTES],
+                   uint8_t *plaintext) {
   uint8_t dek[crypto_secretbox_KEYBYTES];
-  crypto_generichash(dek, sizeof dek, gk, sizeof gk, NULL, 0);
+  if(tuokms_decrypt_get_dek(r,c,d,yc,beta,verifier_beta, dek)) {
+    fail("getting dek");
+    return 1;
+  }
 
   if (crypto_secretbox_open_easy(plaintext, ciphertext+crypto_secretbox_NONCEBYTES, ct_len-crypto_secretbox_NONCEBYTES, ciphertext, dek) != 0) {
+    /* message forged! */
+    fail("message forged");
+    return 1;
+  }
+
+  return 0;
+}
+
+int tuokms_stream_decrypt(const int infd, const int outfd,
+                   const uint8_t w[crypto_core_ristretto255_BYTES],
+                   const uint8_t r[crypto_core_ristretto255_SCALARBYTES],
+                   const uint8_t c[crypto_core_ristretto255_SCALARBYTES],
+                   const uint8_t d[crypto_core_ristretto255_SCALARBYTES],
+                   const uint8_t yc[crypto_core_ristretto255_BYTES],
+                   const uint8_t beta[crypto_core_ristretto255_BYTES],
+                   const uint8_t verifier_beta[crypto_core_ristretto255_BYTES]) {
+  uint8_t dek[crypto_secretbox_KEYBYTES];
+  if(tuokms_decrypt_get_dek(r,c,d,yc,beta,verifier_beta, dek)) {
+    fail("getting dek");
+    return 1;
+  }
+
+  if(stream_decrypt(infd,outfd, w, dek) != 0) {
     /* message forged! */
     fail("message forged");
     return 1;

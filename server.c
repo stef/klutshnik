@@ -9,6 +9,7 @@
 #include <sys/wait.h> // waitpid
 #include <errno.h>    // errno
 #include <stdarg.h>   // va_*
+#include <time.h>     // time, time_t
 #include <noise/protocol.h>
 
 #include "dkg.h"
@@ -16,8 +17,11 @@
 #include "utils.h"
 #include "tuokms.h"
 #include "noise.h"
+#include "macaroon.h"
 
+// todo make configurable and actually enforce
 const int max_kids = 5;
+uint8_t akey[crypto_auth_KEYBYTES];
 
 typedef enum {
   NoOp = 0,
@@ -51,6 +55,10 @@ static void info(const int level, const TParams_t *params, const char* msg, ...)
   va_list args;
   va_start(args, msg);
   if(level>0) printf("\e[0;31merror ");
+
+  pid_t pid = getpid();
+  printf("[%d] ", pid);
+  
   if(params) {
     char keyid[33];
     tohex(16, params->keyid, keyid);
@@ -59,7 +67,7 @@ static void info(const int level, const TParams_t *params, const char* msg, ...)
   }
   vprintf(msg, args);
   va_end(args);
-  if(level>0) printf("\e[0m\n");
+  if(level>0) printf("\e[0m");
   printf("\n");
 }
 
@@ -116,7 +124,7 @@ static int load(const TParams_t params, TOPRF_Share *share) {
     return 1;
   };
   if(st.st_size!= sizeof(TOPRF_Share)) {
-    fprintf(stderr, "invalid share size: %ld, expected: %ld", st.st_size, sizeof(TOPRF_Share));
+    info(1, &params, "invalid share size: %ld, expected: %ld", st.st_size, sizeof(TOPRF_Share));
   }
   if(read(fd, share, sizeof(TOPRF_Share)) != sizeof(TOPRF_Share)) {
     perror("failed to write share");
@@ -125,6 +133,22 @@ static int load(const TParams_t params, TOPRF_Share *share) {
   };
   close(fd);
   return 0;
+}
+
+int new_auth_token(const int fd, const TParams_t params) {
+  const time_t oneyear=time(NULL) + 365*24*60*60; // todo make this configurable
+  Caveats caveats[] = {
+    {EXPIRY_CAVEAT, &oneyear},
+    {KEYID_CAVEAT, params.keyid},
+    {NULL_CAVEAT, 0}
+  };
+  uint8_t mbuf[macaroon_size(caveats)];
+  Macaroon *m=(Macaroon*) mbuf;
+  if(macaroon(akey, 0, NULL, caveats, m)) {
+    return 1;
+  }
+
+  return !(noise_send(fd, mbuf, sizeof mbuf)==sizeof mbuf);
 }
 
 static int dkg(const int fd, const TParams_t params,
@@ -195,6 +219,8 @@ static int dkg_handler(const int fd, const TParams_t params) {
   if(save(params, &share, 1)) return 1;
 
   noise_send(fd,&share, sizeof share);
+
+  if(params.index == 1) return new_auth_token(fd, params);
 
   return 0;
 }
@@ -287,15 +313,48 @@ static int update(const int fd, const TParams_t params) {
   return 0;
 }
 
+int auth(const int fd,
+         const uint8_t client_pubkey[32],
+         const TParams_t params) {
+  uint8_t mbuf[4096];
+  int macaroon_size = noise_read(fd, mbuf, 0);
+  Macaroon *m=(Macaroon*) mbuf;
+  if(macaroon_size!=m->len) {
+    info(1, &params, "expected auth token size (%d) is not expected size(%d)", macaroon_size, m->len);
+  }
+
+  CaveatContext ctx;
+  memcpy(ctx.pubkey,client_pubkey,sizeof ctx.pubkey);
+  memcpy(ctx.keyid,params.keyid,sizeof ctx.keyid);
+  memcpy(&ctx.level,&params.type,sizeof ctx.level);
+
+  if(!macaroon_valid(akey, m, &ctx)) {
+    fail("verify macaroon");
+    return 1;
+  }
+  return 0;
+}
+
 static int handler(const int fd) {
   uint8_t client_pubkey[32];
   if(noise_setup(fd, client_pubkey)) return 1;
-  // todo authorize pubkey
+
+  char cpk_hex[65];
+  tohex(32, client_pubkey,cpk_hex);
+  info(0,NULL,"client pubkey: %s", cpk_hex);
+
   TParams_t params;
   ssize_t len = noise_read(fd, (char*) &params, sizeof params);
   if(len==-1) {
     perror("recv failed");
   } else if(len == sizeof params) {
+
+    if(auth(fd, client_pubkey, params)) {
+      info(1, &params, "authentication failure");
+      shutdown(fd, SHUT_WR);
+      close(fd);
+      return 1;
+    }
 
     switch(params.type) {
     case(DKG): {
@@ -322,7 +381,7 @@ static int handler(const int fd) {
 void mainloop(const int port) {
   int sockfd, connfd;
   pid_t pid;
-  struct sockaddr_in servaddr;
+  struct sockaddr_in servaddr={0};
 
   // socket create and verification
   sockfd = socket(AF_INET, SOCK_STREAM, 0);
@@ -343,7 +402,6 @@ void mainloop(const int port) {
   setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, &to, sizeof to);
 
   // assign IP, PORT
-  bzero(&servaddr, sizeof(servaddr));
   servaddr.sin_family = AF_INET;
   servaddr.sin_addr.s_addr = htonl(INADDR_ANY);
   servaddr.sin_port = htons(port);
@@ -362,9 +420,13 @@ void mainloop(const int port) {
   //fprintf(stderr,"[%d] sockfd: %d\n", port, sockfd);
 
   int status;
+  struct sockaddr_in clientaddr;
+  socklen_t clen=sizeof clientaddr;
+
   while(1) {
     // Accept the data packet from client and verification
-    connfd = accept(sockfd, NULL, NULL);
+    memset(&clientaddr,0, sizeof clientaddr);
+    connfd = accept(sockfd, (struct sockaddr *)&clientaddr, &clen);
     //fprintf(stderr,"[%d] connfd: %d\n", port, connfd);
     if(connfd < 0) {
       if(errno==EAGAIN || errno==EWOULDBLOCK) {
@@ -378,8 +440,10 @@ void mainloop(const int port) {
     // Function for chatting between client and server
 	if((pid = fork()) == 0) {
       close(sockfd);
+      info(0, NULL, "connection from: %s:%d", inet_ntoa(clientaddr.sin_addr), (int) ntohs(clientaddr.sin_port));
+
       if(handler(connfd)) {
-        fprintf(stderr, "handler error. abort\n");
+        info(1, NULL, "handler error. abort");
         exit(1);
       }
       exit(0);
@@ -400,12 +464,14 @@ void usage(const char** argv) {
 }
 
 int main(const int argc, const char** argv) {
-  if(argc<3) usage(argv);
+  if(argc<4) usage(argv);
 
   const int port=atoi(argv[1]);
   info(0, NULL, "starting on port %d", port);
 
   if(kms_noise_init(argv[2])) return 1;
+
+  load_authkey(argv[3], akey);
 
   mainloop(port);
   return 0;

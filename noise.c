@@ -52,7 +52,11 @@ int noise_read(const int fd, void *msg, const size_t size) {
     return -1;
   }
   uint16_t msg_size = message[0] << 8 | message[1];
-  if(msg_size!=size+16) {
+  if(msg_size>MAX_MESSAGE_LEN) {
+    fail("message is bigger than max message size: %ld>%ld", msg_size, MAX_MESSAGE_LEN);
+    return -1;
+  }
+  if(size>0 && msg_size!=size+16) {
     fail("message is bigger than buffer we got: %ld>%ld", msg_size, size+16);
     return -1;
   }
@@ -165,7 +169,6 @@ int noise_setup(const int fd, uint8_t client_pubkey[32]) {
     noise_handshakestate_free(handshake);
     return 1;
   }
-  dump(client_pubkey, 32, "client pubkey: "); // 32 ugh!
 
   noise_handshakestate_free(handshake);
   handshake = 0;
