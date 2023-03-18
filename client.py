@@ -150,8 +150,8 @@ def tuokms_decrypt(ct, r, c, d, pubkey, beta, verifier_beta):
    if(kmslib.tuokms_decrypt(ct, len(ct), r, c, d, pubkey, beta, verifier_beta, pt)): raise ValueError
    return pt.raw
 
-def tuokms_stream_decrypt(w, r, c, d, pubkey, beta, verifier_beta):
-   if(kmslib.tuokms_stream_decrypt(0, 1, w, r, c, d, pubkey, beta, verifier_beta)): raise ValueError
+def tuokms_stream_decrypt(r, c, d, pubkey, beta, verifier_beta):
+   if(kmslib.tuokms_stream_decrypt(0, 1, r, c, d, pubkey, beta, verifier_beta)): raise ValueError
 
 def decrypt(w,pubkey,servers,threshold,keyid):
    # first blind w
@@ -174,7 +174,7 @@ def decrypt(w,pubkey,servers,threshold,keyid):
    beta = thresholdmult(threshold, xresps)
    beta_verifier = thresholdmult(threshold, vresps)
 
-   return tuokms_stream_decrypt(w, r, c, d, pubkey, beta, beta_verifier)
+   return tuokms_stream_decrypt(r, c, d, pubkey, beta, beta_verifier)
 
 def reconstruct(threshold, shares):
    v = ctypes.create_string_buffer(pysodium.crypto_core_ristretto255_SCALARBYTES)

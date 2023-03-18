@@ -1,4 +1,4 @@
-# Klutshnik
+# GNU Klutshnik
 
 Hello my name is Klyoovtuokmshnik, Styepanovich Klyoovtuokmshnik but
 my friends call me "klutshnik" (Narrator: let me interject for a
@@ -158,26 +158,28 @@ You can now try to run the commands from the:
 ```
 % ./client.py -c genkey -t 3
 keyid e2d0ee2a082920dd02822737ac7267b4
-% echo "hello world" | ./client.py -c encrypt -k e2d0ee2a082920dd02822737ac7267b4 >/tmp/encrypted
+% echo "HELLO world" | ./client.py -c encrypt -k 717e7e76565d68c81c843aea57a8fe7a >/tmp/encrypted
 % xxd /tmp/encrypted
-00000000: bd9c 7f46 7eb4 1469 900d e1d4 6ed1 28bc  ...F~..i....n.(.
-00000010: 3a13 6f99 b648 3a4d 1076 8629 68b2 1a70  :.o..H:M.v.)h..p
-00000020: 50de 9ca9 5af1 481a 9f36 1b8e 664b ee17  P...Z.H..6..fK..
-00000030: 66d6 0cc8 6112 3e6e c234 4f80 5e08 0acd  f...a.>n.4O.^...
-00000040: 100d 7c72 3ad8 46d3 4a82 afb0            ..|r:.F.J...
+00000000: 717e 7e76 565d 68c8 1c84 3aea 57a8 fe7a  q~~vV]h...:.W..z
+00000010: ca8e 5548 f778 27c6 f844 5c32 2253 f57e  ..UH.x'..D\2"S.~
+00000020: 774e f66c b78f 6117 e430 f9cc 1631 bc2b  wN.l..a..0...1.+
+00000030: 34b2 df54 89a6 d695 a24d b86a 1bac 31f8  4..T.....M.j..1.
+00000040: c05a 05e8 e25e 0f26 3a28 644c 676f 44ba  .Z...^.&:(dLgoD.
+00000050: cf7c 0152 016c 82ba                      .|.R.l..
+
 % ./client.py -c decrypt </tmp/encrypted
 hello world%
-% echo -n /tmp/encrypted | ./client.py -c update -k e2d0ee2a082920dd02822737ac7267b4
+% echo -n /tmp/encrypted | ./client.py -c update -k 717e7e76565d68c81c843aea57a8fe7a
 % xxd /tmp/encrypted
-00000000: e2d0 ee2a 0829 20dd 0282 2737 ac72 67b4  ...*.) ...'7.rg.
-00000010: 945c b880 5019 40c2 8342 fbd9 22f7 ac44  .\..P.@..B.."..D
-00000020: 67e0 deec 19af f34e fd89 0594 511d 750e  g......N....Q.u.
-00000030: a4a7 9353 b5f3 f99b c9df 1b66 57b8 7758  ...S.......fW.wX
-00000040: a177 9f7c ca38 b93c 29b9 eadb f7b6 5adc  .w.|.8.<).....Z.
-00000050: 48b3 c23c 1fd7 775d 5db3 2502 4711 03a3  H..<..w]].%.G...
-00000060: c561 85                                  .a.
+00000000: 717e 7e76 565d 68c8 1c84 3aea 57a8 fe7a  q~~vV]h...:.W..z
+00000010: 641f 1083 f7c2 89fa 5ff5 089e 1f3f e193  d......._....?..
+00000020: 784c 86a7 8064 b7a2 98c1 1ece dc2a e70f  xL...d.......*..
+00000030: 34b2 df54 89a6 d695 a24d b86a 1bac 31f8  4..T.....M.j..1.
+00000040: c05a 05e8 e25e 0f26 3a28 644c 676f 44ba  .Z...^.&:(dLgoD.
+00000050: cf7c 0152 016c 82ba                      .|.R.l..
+
 % ./client.py -c decrypt </tmp/encrypted
-hello world%
+HELLO world
 ```
 
 # File formats

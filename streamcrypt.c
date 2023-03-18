@@ -18,11 +18,11 @@ extern int debug;
 
 int stream_encrypt(const int infd,
                    const int outfd,
-                   const uint8_t w[crypto_core_ristretto255_BYTES],
                    const uint8_t dek[crypto_secretbox_KEYBYTES]) {
   uint8_t nonce[crypto_secretbox_NONCEBYTES]={0};
   // synthetically derive nonce from w
-  crypto_generichash(nonce,crypto_secretbox_NONCEBYTES/2,w,crypto_core_ristretto255_BYTES,(uint8_t*)"W-to-Nonce",11);
+  randombytes_buf(nonce, crypto_secretbox_NONCEBYTES/2);
+  write(outfd,nonce,crypto_secretbox_NONCEBYTES/2);
 
   uint8_t buf[BLOCK_SIZE + crypto_secretbox_MACBYTES];
   ssize_t buf_len;
@@ -57,11 +57,10 @@ int stream_encrypt(const int infd,
 
 int stream_decrypt(const int infd,
                    const int outfd,
-                   const uint8_t w[crypto_core_ristretto255_BYTES],
                    const uint8_t dek[crypto_secretbox_KEYBYTES]) {
   uint8_t nonce[crypto_secretbox_NONCEBYTES]={0};
   // synthetically derive nonce from w
-  crypto_generichash(nonce,crypto_secretbox_NONCEBYTES/2,w,crypto_core_ristretto255_BYTES,(uint8_t*)"W-to-Nonce",11);
+  read(infd,nonce,crypto_secretbox_NONCEBYTES/2);
 
   ssize_t buf_len;
   uint8_t buf[BLOCK_SIZE + crypto_secretbox_MACBYTES];

@@ -256,7 +256,6 @@ int tuokms_decrypt(const uint8_t *ciphertext, const size_t ct_len,
 }
 
 int tuokms_stream_decrypt(const int infd, const int outfd,
-                   const uint8_t w[crypto_core_ristretto255_BYTES],
                    const uint8_t r[crypto_core_ristretto255_SCALARBYTES],
                    const uint8_t c[crypto_core_ristretto255_SCALARBYTES],
                    const uint8_t d[crypto_core_ristretto255_SCALARBYTES],
@@ -269,7 +268,7 @@ int tuokms_stream_decrypt(const int infd, const int outfd,
     return 1;
   }
 
-  if(stream_decrypt(infd,outfd, w, dek) != 0) {
+  if(stream_decrypt(infd,outfd, dek) != 0) {
     /* message forged! */
     fail("message forged");
     return 1;

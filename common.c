@@ -44,7 +44,7 @@ int uokms_stream_encrypt(const uint8_t yc[crypto_core_ristretto255_BYTES],
   uint8_t dek[crypto_secretbox_KEYBYTES];
   crypto_generichash(dek, sizeof dek, tmp, sizeof tmp, NULL, 0);
 
-  return stream_encrypt(infd, outfd, w, dek);
+  return stream_encrypt(infd, outfd, dek);
 }
 
 int uokms_update_w(const uint8_t delta[crypto_core_ristretto255_SCALARBYTES],
