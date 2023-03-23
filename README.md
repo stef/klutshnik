@@ -83,6 +83,8 @@ git clone https://github.com/project-everest/hacl-star
 export HACL_HOME=$(pwd)/hacl-star
 ```
 
+Only some header files are needed, so you don't have to build it.
+
 Then the other deps:
 
 ## liboprf
