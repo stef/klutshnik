@@ -52,7 +52,12 @@ int stream_encrypt(const int infd,
     write(outfd, buf, buf_len+crypto_secretbox_MACBYTES);
     // nonce[half:-1]++
     sodium_increment(nonce + crypto_secretbox_NONCEBYTES/2, crypto_secretbox_NONCEBYTES/2 - 1);
-    // todo detect overflow
+    int overflow=0;
+    for(int i=0;i<crypto_secretbox_NONCEBYTES/2 - 1;i++) overflow|=nonce[crypto_secretbox_NONCEBYTES/2+i];
+    if(overflow==0) {
+      fail("nonce overflow");
+      return 1;
+    }
   }
   return 0;
 }
@@ -97,7 +102,12 @@ int stream_decrypt(const int infd,
     write(outfd, buf, buf_len-crypto_secretbox_MACBYTES);
     // nonce[half:-1]++
     sodium_increment(nonce + crypto_secretbox_NONCEBYTES/2, crypto_secretbox_NONCEBYTES/2 - 1);
-    // todo detect overflow
+    int overflow=0;
+    for(int i=0;i<crypto_secretbox_NONCEBYTES/2 - 1;i++) overflow|=nonce[crypto_secretbox_NONCEBYTES/2+i];
+    if(overflow==0) {
+      fail("nonce overflow");
+      return 1;
+    }
   }
 
 
