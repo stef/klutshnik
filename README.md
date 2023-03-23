@@ -56,10 +56,6 @@ which:
 
 This code depends on liboprf[1], libsodium[2], pysodium[3], hacl-star[4] and dissononce[5].
 
-It is to be expected that the dependencies noise-c and dissononce will
-be eliminated by specific implementation of the Noise XK handshake
-using libsodium.
-
 Furthermore the authentication tokens will be automatically stored and
 retrieved from an opaque-store[6].
 
@@ -109,12 +105,6 @@ cd ..
 
 git clone https://github.com/stef/klutshnik
 cd klutshnik
-git clone https://github.com/rweather/noise-c
-cd noise-c
-./autogen.sh
-./configure --with-libsodium --with-openssl
-make
-cd ..
 make
 ```
 
@@ -262,8 +252,13 @@ opaque-store are protected by Noise XK handshake patterns:
 https://noiseprotocol.org/noise.html
 https://noiseexplorer.com/patterns/XK/
 
-provided by noise-c: https://github.com/rweather/noise-c and
-dissononce: https://github.com/tgalal/dissononce
+provided by noise-star: https://github.com/Inria-Prosecco/noise-star/
+and dissononce: https://github.com/tgalal/dissononce
+
+It is to be noted, that noise-star by default depends on hacl-star for
+basic cryptographic primitives: ChaChaPoly1305, Blake2b and x25519. But
+in our variant, we replaced all binary dependencies to hacl-star with
+equivalent function from libsodium.
 
 The files are encrypted using `crypto_secretbox()` by libsodium
 https://github.com/jedisct1/libsodium, using the STREAM construction
