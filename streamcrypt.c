@@ -35,14 +35,14 @@ int stream_encrypt(const int infd,
     }
     if(buf_len != BLOCK_SIZE) {
       // last block
-      fprintf(stderr,"%ld != %d\n", buf_len, BLOCK_SIZE);
+      //fprintf(stderr,"%ld != %d\n", buf_len, BLOCK_SIZE);
       nonce[sizeof nonce - 1] = 1;
-      //if(debug) {
-      //  fprintf(stderr, "encrypt last block\n");
-      //  dump(buf, buf_len, "buf ");
-      //  dump(nonce, sizeof nonce, "nonce ");
-      //  dump(dek, crypto_secretbox_KEYBYTES, "dek ");
-      //}
+      if(debug) {
+        fprintf(stderr, "encrypt last block\n");
+        dump(buf, buf_len, "buf ");
+        dump(nonce, sizeof nonce, "nonce ");
+        dump(dek, crypto_secretbox_KEYBYTES, "dek ");
+      }
       crypto_secretbox_easy(buf, buf, buf_len, nonce, dek);
       write(outfd, buf, buf_len+crypto_secretbox_MACBYTES);
       break;
@@ -52,6 +52,7 @@ int stream_encrypt(const int infd,
     write(outfd, buf, buf_len+crypto_secretbox_MACBYTES);
     // nonce[half:-1]++
     sodium_increment(nonce + crypto_secretbox_NONCEBYTES/2, crypto_secretbox_NONCEBYTES/2 - 1);
+    // todo detect overflow
   }
   return 0;
 }
@@ -96,6 +97,7 @@ int stream_decrypt(const int infd,
     write(outfd, buf, buf_len-crypto_secretbox_MACBYTES);
     // nonce[half:-1]++
     sodium_increment(nonce + crypto_secretbox_NONCEBYTES/2, crypto_secretbox_NONCEBYTES/2 - 1);
+    // todo detect overflow
   }
 
 
