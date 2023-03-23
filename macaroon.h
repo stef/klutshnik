@@ -10,7 +10,7 @@ typedef enum {
   PUBKEY_CAVEAT,
   EXPIRY_CAVEAT,
   PRIVLEVEL_CAVEAT//,
-  //NOTBEFORE_CAVET, // todo
+  //NOTBEFORE_CAVEAT, // todo
   //SOURCEIP_MASK    // todo
 } __attribute__ ((__packed__)) CaveatType;
 
