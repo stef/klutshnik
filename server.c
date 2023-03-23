@@ -10,7 +10,6 @@
 #include <errno.h>    // errno
 #include <stdarg.h>   // va_*
 #include <time.h>     // time, time_t
-#include <noise/protocol.h>
 
 #include "dkg.h"
 #include "thmult.h"
@@ -135,7 +134,7 @@ static int load(const TParams_t params, TOPRF_Share *share) {
   return 0;
 }
 
-int new_auth_token(const int fd, const TParams_t params) {
+int new_auth_token(const int fd, session *session, const TParams_t params) {
   const time_t oneyear=time(NULL) + 365*24*60*60; // todo make this configurable
   Caveats caveats[] = {
     {EXPIRY_CAVEAT, &oneyear},
@@ -148,11 +147,11 @@ int new_auth_token(const int fd, const TParams_t params) {
     return 1;
   }
 
-  return !(noise_send(fd, mbuf, sizeof mbuf)==sizeof mbuf);
+  return !(noise_send(fd, session, mbuf, sizeof mbuf)==sizeof mbuf);
 }
 
-static int dkg(const int fd, const TParams_t params,
-               TOPRF_Share *share) {
+static int dkg(const int fd, session *session,
+               const TParams_t params, TOPRF_Share *share) {
   ssize_t len;
   struct {
     uint8_t commitments[params.t][crypto_core_ristretto255_BYTES];
@@ -163,7 +162,7 @@ static int dkg(const int fd, const TParams_t params,
     fail("dkg_start");
     return 1;
   }
-  len = noise_send(fd,(char*)&dsresp,sizeof(dsresp));
+  len = noise_send(fd,session,(uint8_t*)&dsresp,sizeof(dsresp));
   if(len==-1) {
     fail("send dkg_start response");
     return 1;
@@ -176,7 +175,7 @@ static int dkg(const int fd, const TParams_t params,
   } __attribute__ ((__packed__)) dspeers;
 
   //fprintf(stderr, "expecting %ld bytes as peers response\n", sizeof(dspeers));
-  len = noise_read(fd, (char*) &dspeers, sizeof dspeers);
+  len = noise_read(fd, session, (char*) &dspeers, sizeof dspeers);
   if(len==-1) {
     perror("recv dkg_start dspeers failed");
     return 1;
@@ -210,22 +209,22 @@ static int dkg(const int fd, const TParams_t params,
   return 0;
 }
 
-static int dkg_handler(const int fd, const TParams_t params) {
+static int dkg_handler(const int fd, session *session, const TParams_t params) {
   info(0, &params, "dkg");
 
   TOPRF_Share share;
-  if(dkg(fd, params, &share)) return 1;
+  if(dkg(fd, session, params, &share)) return 1;
 
   if(save(params, &share, 1)) return 1;
 
-  noise_send(fd,&share, sizeof share);
+  noise_send(fd, session, (uint8_t*) &share, sizeof share);
 
-  if(params.index == 1) return new_auth_token(fd, params);
+  if(params.index == 1) return new_auth_token(fd, session, params);
 
   return 0;
 }
 
-static int evaluate(const int fd, const TParams_t params) {
+static int evaluate(const int fd, session *session, const TParams_t params) {
   info(0, &params, "evaluate");
   ssize_t len;
 
@@ -237,7 +236,7 @@ static int evaluate(const int fd, const TParams_t params) {
     uint8_t verifier[crypto_core_ristretto255_BYTES];
   } __attribute__ ((__packed__)) eval_params;
 
-  len = noise_read(fd, (char*) &eval_params, sizeof eval_params);
+  len = noise_read(fd, session, (char*) &eval_params, sizeof eval_params);
 
   if(len==-1) {
     perror("recv evaluate params failed");
@@ -257,7 +256,7 @@ static int evaluate(const int fd, const TParams_t params) {
     fail("at tuokms_evaluate");
     return 1;
   }
-  len = noise_send(fd,(char*)&resp,sizeof(resp));
+  len = noise_send(fd,session,(uint8_t*)&resp,sizeof(resp));
   if(len==-1) {
     fail("send eval response");
     return 1;
@@ -266,15 +265,15 @@ static int evaluate(const int fd, const TParams_t params) {
   return 0;
 }
 
-static int update(const int fd, const TParams_t params) {
+static int update(const int fd, session *session, const TParams_t params) {
   info(0, &params, "update");
   ssize_t len;
 
   // generate new shares
   TOPRF_Share share_new;
-  if(dkg(fd, params, &share_new)) return 1;
+  if(dkg(fd, session, params, &share_new)) return 1;
 
-  noise_send(fd,&share_new, sizeof share_new);
+  noise_send(fd,session,(uint8_t*)&share_new, sizeof share_new);
 
   // load old shares
   TOPRF_Share share;
@@ -284,7 +283,7 @@ static int update(const int fd, const TParams_t params) {
   uint8_t mulshares[params.n][sizeof(TOPRF_Share)];
   if(toprf_mpc_mul_start((uint8_t*)&share, (uint8_t*)&share_new, params.n, params.t, mulshares)) return 1;
 
-  len = noise_send(fd,mulshares,sizeof(mulshares));
+  len = noise_send(fd,session,(uint8_t*)mulshares,sizeof(mulshares));
   if(len==-1) {
     fail("send mulshares");
     return 1;
@@ -292,7 +291,7 @@ static int update(const int fd, const TParams_t params) {
 
   // receive shares from others
   uint8_t shares[params.n][TOPRF_Share_BYTES];
-  len = noise_read(fd, (char*) &shares, sizeof shares);
+  len = noise_read(fd,session,(uint8_t*) &shares, sizeof shares);
   if(len==-1) {
     perror("recv evaluate tparams failed");
     return 1;
@@ -308,16 +307,17 @@ static int update(const int fd, const TParams_t params) {
 
   if(save(params, &share, 0)) return 1;
 
-  noise_send(fd,&share, sizeof(TOPRF_Share));
+  noise_send(fd,session,(uint8_t*)&share, sizeof(TOPRF_Share));
 
   return 0;
 }
 
 int auth(const int fd,
+         session *session,
          const uint8_t client_pubkey[32],
          const TParams_t params) {
   uint8_t mbuf[4096];
-  int macaroon_size = noise_read(fd, mbuf, 0);
+  int macaroon_size = noise_read(fd, session, mbuf, 0);
   Macaroon *m=(Macaroon*) mbuf;
   if(macaroon_size!=m->len) {
     info(1, &params, "expected auth token size (%d) is not expected size(%d)", macaroon_size, m->len);
@@ -337,19 +337,20 @@ int auth(const int fd,
 
 static int handler(const int fd) {
   uint8_t client_pubkey[32];
-  if(noise_setup(fd, client_pubkey)) return 1;
+  session *session=NULL;
+  if(noise_setup(fd, &session, client_pubkey)) return 1;
 
   char cpk_hex[65];
   tohex(32, client_pubkey,cpk_hex);
   info(0,NULL,"client pubkey: %s", cpk_hex);
 
   TParams_t params;
-  ssize_t len = noise_read(fd, (char*) &params, sizeof params);
+  ssize_t len = noise_read(fd, session, (char*) &params, sizeof params);
   if(len==-1) {
     perror("recv failed");
   } else if(len == sizeof params) {
 
-    if(auth(fd, client_pubkey, params)) {
+    if(auth(fd, session, client_pubkey, params)) {
       info(1, &params, "authentication failure");
       shutdown(fd, SHUT_WR);
       close(fd);
@@ -358,15 +359,15 @@ static int handler(const int fd) {
 
     switch(params.type) {
     case(DKG): {
-      dkg_handler(fd,params);
+      dkg_handler(fd,session,params);
       break;
     }
     case(Evaluate): {
-      evaluate(fd,params);
+      evaluate(fd,session,params);
       break;
     }
     case(TUOKMS_Update): {
-      update(fd,params);
+      update(fd,session,params);
       break;
     }
     default:;

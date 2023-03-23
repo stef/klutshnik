@@ -1,45 +1,102 @@
 #include <string.h>
 #include <unistd.h>
 #include <fcntl.h>
-#include <noise/protocol.h>
 
 #include "utils.h"
+#include "XK_25519_ChaChaPoly_BLAKE2b/XK.h"
 
 #define MAX_MESSAGE_LEN 4096
 
 uint8_t key[32];
 
-static NoiseCipherState *send_cipher = 0;
-static NoiseCipherState *recv_cipher = 0;
+typedef Noise_XK_device_t        device;
+typedef Noise_XK_session_t       session;
+typedef Noise_XK_peer_t          peer;
+typedef Noise_XK_encap_message_t encap_message;
+typedef Noise_XK_rcode           rcode;
+typedef uint32_t              peer_id;
 
-int noise_send(const int fd, const void *msg, const size_t size) {
-  NoiseBuffer mbuf;
-  int err;
+#define RETURN_IF_ERROR(e, msg) if (!(e)) { fail(msg); return 1; }
+
+static int load_authkeys(const char *path, device *dev) {
+  FILE *stream;
+  char *line = NULL;
+  size_t len = 0;
+  ssize_t nread;
+  int ret = 0;
+
+  stream = fopen(path, "r");
+  if (stream == NULL) {
+    perror("fopen authorized_keys file");
+    return 1;
+  }
+
+  while ((nread = getline(&line, &len, stream)) != -1) {
+    int i;
+    for(i=0;i<nread;i++) {
+      if(line[i]==' ') break;
+    }
+    if(i!=44) {
+      fail("invalid authorized key size: %d, \"%s\"\n", i, line);
+      ret = 1;
+      goto exit;
+    }
+    uint8_t key[32];
+    const char *end;
+    size_t key_len;
+    if(sodium_base642bin(key, sizeof key,
+                       line, i,
+                       NULL, &key_len, &end,
+                       sodium_base64_VARIANT_ORIGINAL_NO_PADDING)) {
+      fail("base64 %ld, %p %p", key_len, end, key);
+      ret = 1;
+      goto exit;
+    }
+    line[nread-1]=0;
+    //dump(key,sizeof key, "loading key for %s: ", &line[i+1]);
+    if (!Noise_XK_device_add_peer(dev, (uint8_t*) &line[i+1], key)) {
+      ret = 1;
+      goto exit;
+    }
+  }
+
+exit:
+  free(line);
+  fclose(stream);
+  return ret;
+}
+
+int noise_send(const int fd, session *session, const uint8_t *msg, const size_t size) {
   if(size>MAX_MESSAGE_LEN) {
     fail("message too large: %ld", size);
     return -1;
   }
+
+  encap_message *encap_msg;
+  uint32_t cipher_msg_len;
+  uint8_t *cipher_msg;
+  rcode res;
+
+  encap_msg = Noise_XK_pack_message_with_conf_level(NOISE_XK_CONF_STRONG_FORWARD_SECRECY, size, (uint8_t*) msg);
+  res = Noise_XK_session_write(encap_msg, session, &cipher_msg_len, &cipher_msg);
+  RETURN_IF_ERROR(Noise_XK_rcode_is_success(res), "noise_send");
+  Noise_XK_encap_message_p_free(encap_msg);
+
   uint8_t message[MAX_MESSAGE_LEN + 2];
-  memcpy(message+2, msg, size);
-  noise_buffer_set_inout(mbuf, message + 2, size, sizeof(message) - 2);
-  err = noise_cipherstate_encrypt(send_cipher, &mbuf);
-  if (err != NOISE_ERROR_NONE) {
-    noise_perror("noise_send", err);
-    return -1;
-  }
-  message[0] = (uint8_t)(mbuf.size >> 8);
-  message[1] = (uint8_t)mbuf.size;
+  memcpy(message+2, cipher_msg, cipher_msg_len);
+  free(cipher_msg);
+
+  message[0] = (uint8_t)(cipher_msg_len >> 8);
+  message[1] = (uint8_t)cipher_msg_len;
   size_t len;
-  if((len = write(fd, message, mbuf.size+2)) != mbuf.size+2) {
-    fail("truncated noise_send: %ld instead of %ld", len, mbuf.size+2);
+  if((len = write(fd, message, cipher_msg_len+2)) != cipher_msg_len+2) {
+    fail("truncated noise_send: %ld instead of %ld", len, cipher_msg_len+2);
     return -1;
   }
   return size;
 }
 
-int noise_read(const int fd, void *msg, const size_t size) {
-  NoiseBuffer mbuf;
-  int err;
+int noise_read(const int fd, session *session, void *msg, const size_t size) {
   if(size>MAX_MESSAGE_LEN) {
     fail("message too large: %ld", size);
     return -1;
@@ -66,122 +123,99 @@ int noise_read(const int fd, void *msg, const size_t size) {
   }
 
   /* Decrypt the incoming message */
-  noise_buffer_set_input(mbuf, message + 2, msg_size);
-  err = noise_cipherstate_decrypt(recv_cipher, &mbuf);
-  if (err != NOISE_ERROR_NONE) {
-    noise_perror("read", err);
-    return 1;
-  }
-  memcpy(msg, mbuf.data, mbuf.size);
+  encap_message *encap_msg;
+  uint32_t plain_msg_len;
+  uint8_t *plain_msg;
+  rcode res = Noise_XK_session_read(&encap_msg, session, msg_size, message+2);
+  RETURN_IF_ERROR(Noise_XK_rcode_is_success(res), "noise_read message");
+  RETURN_IF_ERROR(
+                  Noise_XK_unpack_message_with_auth_level(&plain_msg_len, &plain_msg,
+                                                          NOISE_XK_AUTH_KNOWN_SENDER_NO_KCI,
+                                                          encap_msg),
+                  "Unpack message 2");
+  Noise_XK_encap_message_p_free(encap_msg);
+  if (plain_msg_len > 0) free(plain_msg);
 
-  return mbuf.size;
+  memcpy(msg, plain_msg, plain_msg_len);
+  return plain_msg_len;
 }
 
-int noise_setup(const int fd, uint8_t client_pubkey[32]) {
-  const char protocol[] = "Noise_XK_25519_ChaChaPoly_BLAKE2b";
-  NoiseHandshakeState *handshake;
-  int err;
-  err = noise_handshakestate_new_by_name (&handshake, protocol, NOISE_ROLE_RESPONDER);
-  if (err != NOISE_ERROR_NONE) {
-    noise_perror(protocol, err);
-    return 1;
-  }
+int noise_setup(const int fd, session **sn, uint8_t client_pubkey[32]) {
+  rcode res;
+  encap_message *encap_msg=NULL;
+  uint32_t cipher_msg_len;
+  uint8_t *cipher_msg=NULL;
+  uint32_t plain_msg_len;
+  uint8_t *plain_msg=NULL;
 
-  NoiseDHState *dh;
-  dh = noise_handshakestate_get_local_keypair_dh(handshake);
-  err = noise_dhstate_set_keypair_private(dh, key, 32);
-  if (err != NOISE_ERROR_NONE) {
-    noise_perror("set server private noise key", err);
-    noise_handshakestate_free(handshake);
-    return 1;
-  }
-  err = noise_handshakestate_start(handshake);
-  if (err != NOISE_ERROR_NONE) {
-    noise_perror("start handshake", err);
-    noise_handshakestate_free(handshake);
-    return 1;
-  }
+  uint8_t dummy[32]={0};
+  device *dev = Noise_XK_device_create(0, NULL, NULL, dummy, key);
+  // todo configure
+  if(load_authkeys("config/authorized_keys",dev)) return 1;
+
+  *sn = Noise_XK_session_create_responder(dev);
+  RETURN_IF_ERROR(*sn, "session creation");
 
   uint8_t msg1[48];
   if(read(fd,msg1,sizeof msg1)!=sizeof msg1) {
     fail("failed to read msg1 in noise handshake");
-    noise_handshakestate_free(handshake);
+    // todo ? noise_handshakestate_free(handshake);
     return 1;
   }
 
-  NoiseBuffer mbuf;
-  noise_buffer_set_input(mbuf, msg1, sizeof msg1);
-  err = noise_handshakestate_read_message(handshake, &mbuf, NULL);
-  if (err != NOISE_ERROR_NONE) {
-    noise_perror("read handshake msg1 from client", err);
-    noise_handshakestate_free(handshake);
-    return 1;
+  res = Noise_XK_session_read(&encap_msg, *sn, sizeof msg1, msg1);
+  RETURN_IF_ERROR(Noise_XK_rcode_is_success(res), "Receive message 0");
+  RETURN_IF_ERROR(Noise_XK_unpack_message_with_auth_level(&plain_msg_len, &plain_msg,
+                                                          NOISE_XK_AUTH_ZERO, encap_msg),
+                  "Unpack message 0");
+  Noise_XK_encap_message_p_free(encap_msg);
+  if (plain_msg_len > 0) {
+    free(plain_msg);
+    plain_msg=NULL;
   }
 
   // server responds
-  uint8_t msg2[48];
-  noise_buffer_set_output(mbuf, msg2, sizeof(msg2));
-  err = noise_handshakestate_write_message(handshake, &mbuf, NULL);
-  if (err != NOISE_ERROR_NONE) {
-    noise_perror("write handshake msg2", err);
-    noise_handshakestate_free(handshake);
+  encap_msg = Noise_XK_pack_message_with_conf_level(NOISE_XK_CONF_ZERO, 0, NULL);
+  res = Noise_XK_session_write(encap_msg, *sn, &cipher_msg_len, &cipher_msg);
+  RETURN_IF_ERROR(Noise_XK_rcode_is_success(res), "Send message 1");
+  Noise_XK_encap_message_p_free(encap_msg);
+
+  if(cipher_msg_len!=write(fd, cipher_msg, cipher_msg_len)) {
+    // todo? noise_handshakestate_free(handshake);
+    free(cipher_msg);
     return 1;
   }
-  if(sizeof msg2!=write(fd, msg2, sizeof msg2)) {
-    noise_perror("send handshake msg2", err);
-    noise_handshakestate_free(handshake);
-    return 1;
-  }
+  if(cipher_msg_len > 0) free(cipher_msg);
 
   // wait for client reply
   uint8_t msg3[64];
   if(read(fd,msg3,sizeof msg3)!=sizeof msg3) {
     fail("failed to recv msg3 in noise handshake");
-    noise_handshakestate_free(handshake);
+    // todo ? noise_handshakestate_free(handshake);
     return 1;
   }
 
-  noise_buffer_set_input(mbuf, msg3, sizeof msg3);
-  err = noise_handshakestate_read_message(handshake, &mbuf, NULL);
-  if (err != NOISE_ERROR_NONE) {
-    noise_perror("read client handshake1", err);
-    noise_handshakestate_free(handshake);
-    return 1;
-  }
+  res = Noise_XK_session_read(&encap_msg, *sn, sizeof msg3, msg3);
+  RETURN_IF_ERROR(Noise_XK_rcode_is_success(res), "Receive message 2");
 
-  if (noise_handshakestate_get_action(handshake) != NOISE_ACTION_SPLIT) {
-    fail("noise protocol handshake failed\n");
-    noise_handshakestate_free(handshake);
-    return 1;
-  }
+  // digging out peers spub:
+  peer_id peer_id = Noise_XK_session_get_peer_id(*sn);
+  Noise_XK_peer_t *peer = Noise_XK_device_lookup_peer_by_id(dev, peer_id);
+  Noise_XK_peer_get_static(client_pubkey, peer);
+  dump(client_pubkey, 32, "peers spub: ");
 
-  err = noise_handshakestate_split(handshake, &send_cipher, &recv_cipher);
-  if (err != NOISE_ERROR_NONE) {
-    noise_handshakestate_free(handshake);
-    noise_perror("split to start data transfer", err);
-    return 1;
-  }
-
-  dh = noise_handshakestate_get_remote_public_key_dh(handshake);
-  err=noise_dhstate_get_public_key(dh, client_pubkey, 32); // 32 ugh!
-  if (err != NOISE_ERROR_NONE) {
-    noise_perror("failed to get client pubkey", err);
-    noise_handshakestate_free(handshake);
-    return 1;
-  }
-
-  noise_handshakestate_free(handshake);
-  handshake = 0;
+  RETURN_IF_ERROR(
+                  Noise_XK_unpack_message_with_auth_level(&plain_msg_len, &plain_msg,
+                                                          NOISE_XK_AUTH_KNOWN_SENDER_NO_KCI,
+                                                          encap_msg),
+                  "Unpack message 2");
+  Noise_XK_encap_message_p_free(encap_msg);
+  if (plain_msg_len > 0) free(plain_msg);
 
   return 0;
 }
 
 int kms_noise_init(const char* path) {
-  if (noise_init() != NOISE_ERROR_NONE) {
-    fail("Noise initialization");
-    return 1;
-  }
-
   int fd = open(path,'r');
   if(read(fd,key,32) != 32) {
     fail("reading private key");
