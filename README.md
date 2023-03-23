@@ -54,7 +54,7 @@ which:
 
 # Dependencies
 
-This code depends on liboprf[1], libsodium[2], pysodium[3], noise-c[4] and dissononce[5].
+This code depends on liboprf[1], libsodium[2], pysodium[3], hacl-star[4] and dissononce[5].
 
 It is to be expected that the dependencies noise-c and dissononce will
 be eliminated by specific implementation of the Noise XK handshake
@@ -66,7 +66,7 @@ retrieved from an opaque-store[6].
 [1] https://github.com/stef/liboprf/
 [2] https://github.com/jedisct1/libsodium
 [3] https://github.com/stef/pysodium
-[4] https://github.com/stef/pysodium
+[4] https://github.com/project-everest/hacl-star
 [5] https://github.com/tgalal/dissononce
 [6] https://github.com/stef/opaque-store/
 
@@ -74,6 +74,16 @@ retrieved from an opaque-store[6].
 
 You need to install libsodium-dev, dissononce and pysodium, with
 whatever tools your OS provides you with.
+
+First of all you need to get hacl-star and export an environment
+variable pointing to it:
+
+```
+git clone https://github.com/project-everest/hacl-star
+export HACL_HOME=$(pwd)/hacl-star
+```
+
+Then the other deps:
 
 ## liboprf
 
