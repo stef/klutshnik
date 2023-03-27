@@ -84,10 +84,10 @@ int noise_send(const int fd, session *session, const uint8_t *msg, const size_t 
 
   uint8_t message[MAX_MESSAGE_LEN + 2];
   memcpy(message+2, cipher_msg, cipher_msg_len);
-  free(cipher_msg);
+  if(cipher_msg_len>0) free(cipher_msg);
 
-  message[0] = (uint8_t)(cipher_msg_len >> 8);
-  message[1] = (uint8_t)cipher_msg_len;
+  message[0] = (uint8_t) (cipher_msg_len >> 8);
+  message[1] = (uint8_t) cipher_msg_len;
   size_t len;
   if((len = write(fd, message, cipher_msg_len+2)) != cipher_msg_len+2) {
     fail("truncated noise_send: %ld instead of %ld", len, cipher_msg_len+2);
@@ -134,9 +134,9 @@ int noise_read(const int fd, session *session, void *msg, const size_t size) {
                                                           encap_msg),
                   "Unpack message 2");
   Noise_XK_encap_message_p_free(encap_msg);
+  memcpy(msg, plain_msg, plain_msg_len);
   if (plain_msg_len > 0) free(plain_msg);
 
-  memcpy(msg, plain_msg, plain_msg_len);
   return plain_msg_len;
 }
 
@@ -170,8 +170,13 @@ int noise_setup(const int fd, session **sn, uint8_t client_pubkey[32]) {
                   "Unpack message 0");
   Noise_XK_encap_message_p_free(encap_msg);
   if (plain_msg_len > 0) {
+    // we don't expect a message. so we abort our protocol
+    fail("msg1 of handshake was not empty");
     free(plain_msg);
+    free(*sn);
+    *sn=NULL;
     plain_msg=NULL;
+    return 1;
   }
 
   // server responds
@@ -181,8 +186,9 @@ int noise_setup(const int fd, session **sn, uint8_t client_pubkey[32]) {
   Noise_XK_encap_message_p_free(encap_msg);
 
   if(cipher_msg_len!=write(fd, cipher_msg, cipher_msg_len)) {
-    // todo? noise_handshakestate_free(handshake);
     free(cipher_msg);
+    free(*sn);
+    *sn=NULL;
     return 1;
   }
   if(cipher_msg_len > 0) free(cipher_msg);
@@ -191,7 +197,8 @@ int noise_setup(const int fd, session **sn, uint8_t client_pubkey[32]) {
   uint8_t msg3[64];
   if(read(fd,msg3,sizeof msg3)!=sizeof msg3) {
     fail("failed to recv msg3 in noise handshake");
-    // todo ? noise_handshakestate_free(handshake);
+    free(*sn);
+    *sn=NULL;
     return 1;
   }
 
@@ -210,7 +217,14 @@ int noise_setup(const int fd, session **sn, uint8_t client_pubkey[32]) {
                                                           encap_msg),
                   "Unpack message 2");
   Noise_XK_encap_message_p_free(encap_msg);
-  if (plain_msg_len > 0) free(plain_msg);
+  if (plain_msg_len > 0) {
+    // we don't expect a message, so we just drop it
+    fail("msg3 of handshake was not empty");
+    free(plain_msg);
+    free(*sn);
+    *sn=NULL;
+    return 1;
+  }
 
   return 0;
 }
