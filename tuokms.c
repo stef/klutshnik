@@ -10,7 +10,7 @@
 #include "utils.h"
 #include "streamcrypt.h"
 
-const int debug=1;
+const int debug=0;
 
 typedef struct {
   uint8_t index;
