@@ -1,6 +1,6 @@
 # GNU Klutshnik
 
-Hello my name is Klyoovtuokmshnik, Styepanovich Klyoovtuokmshnik but
+Hello my name is Klyoovtuokmshnik, Styepanovich Klyoovtuokmshnik - but
 my friends call me "klutshnik" (Narrator: let me interject for a
 moment, What you are referring to as Klutshnik, is in fact,
 GNU/Klutshnik, or as I've recently taken to calling it, GNU plus
