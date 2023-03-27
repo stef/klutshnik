@@ -10,8 +10,7 @@ class NoiseWrapper():
      s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
      s.settimeout(5)
      s.connect((address, port))
-     noised =cls(s, privkey, pubkey)
-     return noised
+     return cls(s, privkey, pubkey)
 
    def __init__(self, fd, privkey, pubkey):
       self.fd = fd
