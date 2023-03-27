@@ -160,8 +160,8 @@ def decrypt(w,pubkey,servers,threshold,keyid):
    n = len(servers)
    conns = connect(servers, Evaluate, threshold, n, keyid)
 
+   msg = a + v
    for index,conn in enumerate(conns):
-       msg = a + v
        conn.sendall(msg)
 
    # receive responses from tuokms_evaluate
