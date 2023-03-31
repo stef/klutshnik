@@ -224,6 +224,11 @@ https://eprint.iacr.org/2019/1275
     "Updatable Oblivious Key Management for Storage Systems"
     by Stanislaw Jarecki, Hugo Krawczyk, and Jason Resch
 
+The Threshold OPRF is based on: https://eprint.iacr.org/2017/363
+
+    "TOPPSS: Cost-minimal Password-Protected Secret Sharing based on Threshold OPRF"
+    by Stanislaw Jarecki, Aggelos Kiayias, Hugo Krawczyk, and Jiayu Xu
+
 Within this, the DKG is based on
 
     "Secure Distributed Key Generation for Discrete-Log Based Cryptosystems"
