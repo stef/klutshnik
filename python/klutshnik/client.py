@@ -12,9 +12,7 @@ from klutshnik.noiseclient import NoiseWrapper
 from opaquestore import opaquestore
 
 from klutshnik.utils import getcfg
-from klutshnik.wrapper import dkg, update, decrypt, stream_encrypt, update_w, DKG, Evaluate, TUOKMS_Update
-
-KEYID_SIZE = 16
+from klutshnik.wrapper import dkg, update, decrypt, stream_encrypt, update_w, DKG, Evaluate, TUOKMS_Update, KEYID_SIZE
 
 config = None
 
@@ -61,11 +59,11 @@ def processcfg(config):
                         PublicKey(a2b_base64(v['pubkey']))) 
                        for k,v in config.get('servers',{}).items()]
 
+  if 'authkey' in config:
+    config['authkey']=a2b_base64(config['authkey']+'==')
+
   if 'opaque-storage' not in config:
-     if 'authkey' not in config:
         raise ValueError("no opaque-storage and no authkey in config file")
-     config['authkey']=a2b_base64(config['authkey']+'==')
-     return config
 
   config['opaque-storage']['noise_key']=KeyPair.from_bytes(a2b_base64(config['opaque-storage']['noise_key']+'=='))
   config['opaque-storage']['server_pubkey']=PublicKey(a2b_base64(config['opaque-storage']['server_pubkey']+'=='))
@@ -74,7 +72,7 @@ def processcfg(config):
   return config
 
 def authkey(op, keyid):
-  return config.get('authkey', getauthkey(op, keyid))
+  return config.get('authkey') or getauthkey(op, keyid)
 
 def main(params=sys.argv):
     global config
@@ -100,8 +98,9 @@ def main(params=sys.argv):
         pubkey, keyid, auth_token = dkg(config['servers'], args.threshold, config['key'], authkey)
 
         setauthkey(keyid,auth_token)
-        print("authtoken for new key: ", b2a_base64(auth_token).decode('utf8').strip())
-     
+        if 'opaque-storage' not in config:
+          print("authtoken for new key: ", b2a_base64(auth_token).decode('utf8').strip())
+
         savekey(keyid.hex(), pubkey, args.threshold)
         print("keyid", keyid.hex())
 
