@@ -9,7 +9,7 @@ from binascii import unhexlify, a2b_base64, b2a_base64
 from dissononce.dh.x25519.keypair import KeyPair
 from dissononce.dh.x25519.public import PublicKey
 from klutshnik.noiseclient import NoiseWrapper
-from opaquestore import opaquestore
+from opaquestore import client as opaquestore
 
 from klutshnik.utils import getcfg
 from klutshnik.wrapper import dkg, update, decrypt, stream_encrypt, update_w, DKG, Evaluate, TUOKMS_Update, KEYID_SIZE
@@ -23,7 +23,7 @@ def getpwd(title):
         for line in out.split(b'\n'):
             if line.startswith(b"D "): return line[2:]
 
-def getauthkey(op, keyid):
+def getauthtok(op, keyid):
    cfg = config['opaque-storage']
    if op == DKG:
       keyid = b'unbound'
@@ -32,7 +32,7 @@ def getauthkey(op, keyid):
    s = NoiseWrapper.connect(cfg['address'], cfg['port'], cfg['noise_key'], cfg['server_pubkey'])
    return opaquestore.get(s, pwd, keyid)
 
-def setauthkey(keyid, token):
+def setauthtok(keyid, token):
    cfg = config['opaque-storage']
    keyid=pysodium.crypto_generichash(cfg['username'].encode('utf8') + keyid)
    pwd = getpwd("saving auth token to opaque-store password")
@@ -59,11 +59,11 @@ def processcfg(config):
                         PublicKey(a2b_base64(v['pubkey']))) 
                        for k,v in config.get('servers',{}).items()]
 
-  if 'authkey' in config:
-    config['authkey']=a2b_base64(config['authkey']+'==')
+  if 'authtok' in config:
+    config['authtok']=a2b_base64(config['authtok']+'==')
 
   if 'opaque-storage' not in config:
-        raise ValueError("no opaque-storage and no authkey in config file")
+        raise ValueError("no opaque-storage and no authtok in config file")
 
   config['opaque-storage']['noise_key']=KeyPair.from_bytes(a2b_base64(config['opaque-storage']['noise_key']+'=='))
   config['opaque-storage']['server_pubkey']=PublicKey(a2b_base64(config['opaque-storage']['server_pubkey']+'=='))
@@ -71,8 +71,8 @@ def processcfg(config):
 
   return config
 
-def authkey(op, keyid):
-  return config.get('authkey') or getauthkey(op, keyid)
+def authtok(op, keyid):
+  return config.get('authtok') or getauthtok(op, keyid)
 
 def main(params=sys.argv):
     global config
@@ -85,7 +85,7 @@ def main(params=sys.argv):
     f"       {sys.argv[0]} -c decrypt <filetodecrypt >decryptedfile"
     f"       {sys.argv[0]} -c update -k keyid <listoffilestoupdate")
 
-    parser.add_argument('-c', '--cmd', choices={"genkey", "encrypt", "decrypt", "update", 'authkey'})
+    parser.add_argument('-c', '--cmd', choices={"genkey", "encrypt", "decrypt", "update", 'authtok'})
     parser.add_argument('-t', '--threshold', type=int)
     parser.add_argument('-k', '--keyid')
     args = parser.parse_args()
@@ -95,9 +95,9 @@ def main(params=sys.argv):
             print("Warning this key will not be updatable.", file=sys.stderr)
             print("You need to have at least 2*threshold+1 servers for updatable keys", file=sys.stderr)
             if input("press y/Y to continue") not in ('y','Y'): return
-        pubkey, keyid, auth_token = dkg(config['servers'], args.threshold, config['key'], authkey)
+        pubkey, keyid, auth_token = dkg(config['servers'], args.threshold, config['key'], authtok)
 
-        setauthkey(keyid,auth_token)
+        setauthtok(keyid,auth_token)
         if 'opaque-storage' not in config:
           print("authtoken for new key: ", b2a_base64(auth_token).decode('utf8').strip())
 
@@ -113,11 +113,11 @@ def main(params=sys.argv):
         keyid = os.read(0, KEYID_SIZE)
         w = os.read(0, pysodium.crypto_core_ristretto255_BYTES)
         pubkey, threshold = loadkey(keyid.hex())
-        decrypt(w, pubkey, config['servers'], threshold, keyid, config['key'], authkey)
+        decrypt(w, pubkey, config['servers'], threshold, keyid, config['key'], authtok)
 
     elif args.cmd=="update":
         _, threshold = loadkey(args.keyid)
-        pubkey, delta = update(config['servers'], threshold, unhexlify(args.keyid), config['key'], authkey)
+        pubkey, delta = update(config['servers'], threshold, unhexlify(args.keyid), config['key'], authtok)
         savekey(args.keyid, pubkey, threshold)
         for path in sys.stdin:
             with open(path,'r+b') as fd:
@@ -129,9 +129,9 @@ def main(params=sys.argv):
                 w = update_w(delta, w)
                 fd.seek(-pysodium.crypto_core_ristretto255_BYTES,io.SEEK_CUR)
                 fd.write(w)
-    elif args.cmd=="authkey":
+    elif args.cmd=="authtok":
         token = a2b_base64(sys.stdin.buffer.readline().rstrip(b'\n')+b'==')
-        setauthkey(b'unbound', token)
+        setauthtok(b'unbound', token)
 
     else:
         parser.print_help()
