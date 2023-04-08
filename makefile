@@ -1,9 +1,9 @@
-INCLUDES=-I../toprf -IXK_25519_ChaChaPoly_BLAKE2b -I$(HACL_HOME)/dist/karamel/include -I$(HACL_HOME)/dist/karamel/krmllib/dist/minimal
+INCLUDES=-I$(OPRF_HOME)/include/oprf -IXK_25519_ChaChaPoly_BLAKE2b -I$(HACL_HOME)/dist/karamel/include -I$(HACL_HOME)/dist/karamel/krmllib/dist/minimal
 CFLAGS=-march=native -Wall -O2 -g -fstack-protector-strong -DWITH_SODIUM -D_FORTIFY_SOURCE=2 \
 		 -fasynchronous-unwind-tables -fpic -fstack-clash-protection -fcf-protection=full \
 		 -Werror=format-security -Werror=implicit-function-declaration -Wl,-z,defs -Wl,-z,relro \
 		 -ftrapv -Wl,-z,noexecstack $(INCLUDES)
-LDFLAGS=../toprf/liboprf.a XK_25519_ChaChaPoly_BLAKE2b/libnoiseapi.a -lsodium  -lcrypto
+LDFLAGS=$(OPRF_HOME)/lib/liboprf.a XK_25519_ChaChaPoly_BLAKE2b/libnoiseapi.a -lsodium  -lcrypto
 CC=gcc
 SOEXT=so
 STATICEXT=a

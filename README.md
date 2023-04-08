@@ -85,11 +85,14 @@ Then the other deps:
 
 ## liboprf
 
+Install libsodium with development files from your favorite package repository.
+
 ```
 # in directory $buildroot
 git clone https://github.com/stef/liboprf/
 cd liboprf
-# have a look in the makefile to be sure you trust the next step with root permissions
+# you can use the PREFIX environment variable to set the install location to a writable directory
+export PREFIX=/path/preferred/oprf/location
 make install
 cp liboprf.so /usr/lib # or wherever your OS stores libs
 # on glibc based systems also run:
@@ -102,9 +105,9 @@ cd ..
 
 ```
 # in directory $buildroot
-
 git clone https://github.com/stef/klutshnik
 cd klutshnik
+export OPRF_HOME=$PREFIX # match OPRF install location from previous step
 make
 ```
 
