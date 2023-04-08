@@ -230,7 +230,7 @@ int noise_setup(const int fd, session **sn, uint8_t client_pubkey[32]) {
 }
 
 int kms_noise_init(const char* path) {
-  int fd = open(path,'r');
+  int fd = open(path,O_RDONLY);
   if(read(fd,key,32) != 32) {
     fail("reading private key");
     return 1;
