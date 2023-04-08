@@ -3,12 +3,12 @@ CFLAGS=-march=native -Wall -O2 -g -fstack-protector-strong -DWITH_SODIUM -D_FORT
 		 -fasynchronous-unwind-tables -fpic -fstack-clash-protection -fcf-protection=full \
 		 -Werror=format-security -Werror=implicit-function-declaration -Wl,-z,defs -Wl,-z,relro \
 		 -ftrapv -Wl,-z,noexecstack $(INCLUDES)
-LDFLAGS=$(OPRF_HOME)/lib/liboprf.a XK_25519_ChaChaPoly_BLAKE2b/libnoiseapi.a -lsodium  -lcrypto
+LDFLAGS=$(OPRF_HOME)/lib/liboprf.a XK_25519_ChaChaPoly_BLAKE2b/libnoiseapi.a -lsodium
 CC=gcc
 SOEXT=so
 STATICEXT=a
 
-all: libkms.so kms
+all: libkms.so kms macaroon
 
 asan: CFLAGS=-fsanitize=address -static-libasan -g -march=native -Wall -O2 -DWITH_SODIUM \
 	-g -fstack-protector-strong -fpic -fstack-clash-protection -fcf-protection=full \
@@ -30,6 +30,9 @@ tuokms: tuokms.c thmult.c matrices.c common.c utils.c
 
 uokms: uokms.c common.c utils.c
 	gcc $(CFLAGS) -o $@ $^ $(LDFLAGS)
+
+macaroon: macaroon.c utils.c
+	gcc $(CFLAGS) -DWITH_MAIN -o $@ $^ -lsodium
 
 XK_25519_ChaChaPoly_BLAKE2b/libnoiseapi.a: XK_25519_ChaChaPoly_BLAKE2b/XK.c XK_25519_ChaChaPoly_BLAKE2b/Noise_XK.c 
 	$(MAKE) -C XK_25519_ChaChaPoly_BLAKE2b libnoiseapi.a
