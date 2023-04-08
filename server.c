@@ -80,7 +80,7 @@ static int save(const TParams_t params, const TOPRF_Share *share, const int crea
   sprintf(ptr,"-%02x", params.index);
   int fd;
   if(create) {
-    fd = open(fname, O_CREAT | O_EXCL | O_WRONLY);
+    fd = open(fname, O_CREAT | O_EXCL | O_WRONLY, 0600);
   } else {
     fd = open(fname, O_WRONLY);
   }
