@@ -17,6 +17,10 @@ WORKDIR /kms/klutshnik
 RUN git checkout docker
 RUN make
 WORKDIR /kms/klutshnik/python
-RUN apk add python3 py3-pip python3-dev # TODO merge
+RUN apk add openssl-dev python3 py3-pip python3-dev # TODO merge
 RUN pip install -r requirements.txt
-
+COPY template.cfg /kms/klutshnik/klutshnik.cfg
+COPY startup.sh /kms/klutshnik/python/startup.sh
+ENV LD_LIBRARY_PATH /kms/klutshnik
+EXPOSE 10000
+CMD ["/bin/sh","./startup.sh"]
