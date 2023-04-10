@@ -31,4 +31,5 @@ RUN cp klutshnik/genkey.py .
 WORKDIR /client/klutshnik
 COPY startup.sh /client/klutshnik/startup.sh
 COPY gen_config.py /client/klutshnik/gen_config.py
+RUN mkdir python/keys
 CMD ["/bin/sh","./startup.sh"]
