@@ -62,12 +62,12 @@ def processcfg(config):
   if 'authtok' in config:
     config['authtok']=a2b_base64(config['authtok']+'==')
 
-  if 'opaque-storage' not in config and 'authtok' not in config:
-        raise ValueError("no opaque-storage and no authtok in config file")
-
-  config['opaque-storage']['noise_key']=KeyPair.from_bytes(a2b_base64(config['opaque-storage']['noise_key']+'=='))
-  config['opaque-storage']['server_pubkey']=PublicKey(a2b_base64(config['opaque-storage']['server_pubkey']+'=='))
-  opaquestore.config = config['opaque-storage']
+  if 'opaque-storage' in config:
+     config['opaque-storage']['noise_key']=KeyPair.from_bytes(a2b_base64(config['opaque-storage']['noise_key']+'=='))
+     config['opaque-storage']['server_pubkey']=PublicKey(a2b_base64(config['opaque-storage']['server_pubkey']+'=='))
+     opaquestore.config = config['opaque-storage']
+  elif 'authtok' not in config:
+     raise ValueError("no opaque-storage and no authtok in config file")
 
   return config
 
