@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
    
-FROM node:18-alpine
+FROM python:3.11.1-alpine
 WORKDIR /kms
 RUN apk add build-base libsodium-dev git openssl-dev python3 py3-pip python3-dev  
 # RUN git clone https://github.com/stef/klutshnik
