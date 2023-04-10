@@ -19,14 +19,15 @@ RUN make
 WORKDIR /client/klutshnik/python
 RUN pip install -r requirements.txt
 ENV LD_LIBRARY_PATH /client/klutshnik
-EXPOSE 10000
 WORKDIR /client
 RUN git clone https://github.com/stef/libopaque
 WORKDIR /client/libopaque/src
 ENV OPRFHOME /client/liboprf
-# RUN mkdir /usr/local/include
 RUN make install
 WORKDIR /client/klutshnik/python
 RUN touch klutshnik/__init__.py
 RUN cp klutshnik/client.py .
-
+WORKDIR /client/klutshnik
+COPY startup.sh /client/klutshnik/startup.sh
+COPY gen_config.py /client/klutshnik/gen_config.py
+CMD ["/bin/sh","./startup.sh"]
