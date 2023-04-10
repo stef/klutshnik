@@ -2,7 +2,7 @@ This all should be in Docker Compose, but I deemed this enough for a tech demo
 
 ## KMS
 
-Duild the container:
+Build the container:
 
 `docker build . -t klutshnik-kms`
 
