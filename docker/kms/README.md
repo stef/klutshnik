@@ -2,6 +2,10 @@ This all should be in Docker Compose, but I deemed this enough for a tech demo
 
 ## KMS
 
+Duild the container:
+
+`docker build . -t klutshnik-kms`
+
 Run the container with name `kms1`:
 
 `docker run --env KMS_NAME=kms1 -v "$(dirname $(pwd))"/config:/kms/klutshnik/config_host --rm -t klutshnik-kms`
