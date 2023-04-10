@@ -7,5 +7,5 @@ cd python
 ./genkey.py client.tmp | base64 -d >>client.tmp
 base64 < client.tmp > ../config/client.key
 cd ..
-python gen_config.py config_host/ | tee klutshnik.cfg
+python gen_config.py config_host/ | tee python/klutshnik.cfg
 /bin/sh -i 

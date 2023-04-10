@@ -27,6 +27,7 @@ RUN make install
 WORKDIR /client/klutshnik/python
 RUN touch klutshnik/__init__.py
 RUN cp klutshnik/client.py .
+RUN cp klutshnik/genkey.py .
 WORKDIR /client/klutshnik
 COPY startup.sh /client/klutshnik/startup.sh
 COPY gen_config.py /client/klutshnik/gen_config.py
