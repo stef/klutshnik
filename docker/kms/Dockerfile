@@ -19,6 +19,8 @@ WORKDIR /kms/klutshnik/python
 RUN pip install -r requirements.txt
 COPY startup.sh /kms/klutshnik/python/startup.sh
 ENV LD_LIBRARY_PATH /kms/klutshnik
+RUN mkdir ../shares
+RUN mkdir ../keys
 EXPOSE 10000
 ENV KMS_NAME kms
 CMD ["/bin/sh","./startup.sh"]

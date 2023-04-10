@@ -23,7 +23,7 @@ pubkey="%s"
 
 d = sys.argv[1]
 
-authtok = open(os.path.join(d, "godmode.b64"),"r").read()
+authtok = open(os.path.join(d, "godmode.b64"),"r").read().strip()
 
 cfg = TPL_HEAD % (authtok)
 

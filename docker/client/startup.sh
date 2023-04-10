@@ -1,7 +1,7 @@
 #!/bin/sh
 set -e
 ./macaroon create -a config_host/auth.key | tee godmode.key | ./macaroon dump
-cat godmode.key | base64 -w0 > config_host/godmode.b64
+cat godmode.key > config_host/godmode.b64
 mkdir config
 cd python
 ./genkey.py client.tmp | tee ../config_host/authorized_keys.tmp | base64 -d >>client.tmp
