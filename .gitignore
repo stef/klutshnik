@@ -15,7 +15,6 @@ libkms.so
 macaroon
 opaque-store.cfg
 opaque-stored.cfg
-config
 keys
 ots
 shares
