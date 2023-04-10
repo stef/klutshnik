@@ -17,9 +17,7 @@ Run the container with name `kms1`:
 
 This bind mounts the `docker/config` directory to the container and generates KMS public and private keys there.
 
-The public key and the IP address is echoed to stdout, so the client can be appropriately configured.
-
-You should launch at least 5 containers from this image.
+You should launch at least 5 KMS containers from this image, every KMS container must have a unique name (`[A-Za-z0-9]+` to avoid trouble).
 
 ## Client
 
