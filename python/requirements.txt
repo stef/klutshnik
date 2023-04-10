@@ -1,0 +1,3 @@
+dissononce==0.34.3
+opaquestore==0.0.6
+pysodium==0.7.12
