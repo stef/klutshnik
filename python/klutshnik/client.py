@@ -33,6 +33,7 @@ def getauthtok(op, keyid):
    return opaquestore.get(s, pwd, keyid)
 
 def setauthtok(keyid, token):
+   if not 'opaque-storage' in config: return
    cfg = config['opaque-storage']
    keyid=pysodium.crypto_generichash(cfg['username'].encode('utf8') + keyid)
    pwd = getpwd("saving auth token to opaque-store password")
