@@ -8,8 +8,7 @@ RUN git clone https://github.com/v-p-b/klutshnik
 RUN git clone https://github.com/project-everest/hacl-star
 RUN git clone https://github.com/stef/liboprf/
 WORKDIR /client/liboprf
-RUN make install
-RUN cp liboprf.so /usr/lib
+RUN PREFIX=/usr make install
 WORKDIR /client/klutshnik/XK_25519_ChaChaPoly_BLAKE2b 
 ENV HACL_HOME /client/hacl-star
 RUN make

@@ -8,7 +8,7 @@ RUN git clone https://github.com/v-p-b/klutshnik
 RUN git clone https://github.com/project-everest/hacl-star
 RUN git clone https://github.com/stef/liboprf/
 WORKDIR /kms/liboprf
-RUN make install
+RUN PREFIX=/usr make install
 WORKDIR /kms/klutshnik/XK_25519_ChaChaPoly_BLAKE2b 
 ENV HACL_HOME /kms/hacl-star
 RUN make
