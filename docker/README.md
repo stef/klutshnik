@@ -17,3 +17,14 @@ This bind mounts the `docker/config` directory to the container and generates KM
 
 The public key and the IP address is echoed to stdout, so the client can be appropriately configured.
 
+You should lauch at least 5 containers from this image.
+
+# Client
+
+Build:
+
+`docker build . -t klutshnik-client`
+
+The client image is supposed to be used interactively:
+
+`docker run --rm -it klutshnik-client /bin/sh`
