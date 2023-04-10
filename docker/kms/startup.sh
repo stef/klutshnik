@@ -5,4 +5,5 @@ mkdir ../config
 echo `python klutshnik/genkey.py ../config_host/${KMS_NAME}.key` | tee ../config_host/${KMS_NAME}.pub
 ifconfig eth0 | egrep -o 'inet addr:([0-9\.]+)'  | cut -d ':' -f 2 | tee ../config_host/${KMS_NAME}.ip
 cd ..
+ln -s $(realpath config_host)/authorized_keys config/authorized_keys
 ./kms 10000 config_host/${KMS_NAME}.key config_host/auth.key
