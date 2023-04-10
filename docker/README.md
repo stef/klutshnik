@@ -21,7 +21,7 @@ The public key and the IP address is echoed to stdout, so the client can be appr
 
 You should launch at least 5 containers from this image.
 
-# Client
+## Client
 
 (All commands assume CWD to be docker/client)
 
