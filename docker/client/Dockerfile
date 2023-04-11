@@ -25,7 +25,6 @@ WORKDIR /client/libopaque/src
 ENV OPRFHOME /client/liboprf
 RUN make install
 WORKDIR /client/klutshnik/python
-RUN touch klutshnik/__init__.py
 RUN cp klutshnik/client.py .
 RUN cp klutshnik/genkey.py .
 WORKDIR /client/klutshnik
