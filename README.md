@@ -132,7 +132,7 @@ accordingly in the file `klutshnik.cfg`
 We also need to create a client key:
 
 ```
-./genkey.py client.tmp | base64 -d >>client.tmp
+./genkey.py client.tmp | tee client.pub | base64 -d >>client.tmp
 base64 <client.tmp >client.key
 rm client.tmp
 ```
@@ -151,6 +151,44 @@ running. This directory is used by the kms to store the shares:
 ```
 mkdir shares
 ```
+
+On the servers you also need a `config` directory, which contains the
+file `authorized_keys`, this is similar to the `authorized_keys` file in
+ssh. This file contains the public key key of the client in base64
+format and a user/client name separated by a space from the key.
+
+```
+mkdir config
+{ head -1 client.pub | tr -d '\n' ; echo " myusername" }
+```
+
+The file `client.pub` was created above with the genkey.py script.
+
+This `config` directory must also contain a file `auth.key` which is
+just 32 bytes of good entropy:
+
+```
+dd if=/dev/random of=config/auth.key bs=1 count=32
+```
+
+This `auth.key` must be the same for all servers, this is the key that
+creates and verifies the authorization tokens. Which brings us to the
+tool `macaroon`. This is a simple command line tool to create and
+manipulate macaroons, the tokens klutshnik uses for
+authorization. Currently even for creating new keys you need an
+authorization token, a so called godmode token, you can create it like this:
+
+```
+./macaroon create -a config/auth.key
+```
+
+the file `config/auth.key` is the authorization key that is stored on
+all servers. the output of this command is a base64 encoded token,
+which you can put into your `klutshnik.cfg` as `authtok="<the token>"`
+to be able to use your client with the servers. In later versions of
+klutshnik support for these godmode token will be removed, if they
+leak to an attacker they can do anything... For more info on the
+`macaroon` tool see the section below.
 
 Finally you can start the servers, a simple script `start-servers.sh`
 is provided which starts 5 servers on localhost with the keys
@@ -186,6 +224,26 @@ hello world%
 % ./client.py -c decrypt </tmp/encrypted
 HELLO world
 ```
+# Macaroon tool
+
+If you want to look at your macaroon, you can do so by passing it on
+standard input to
+
+```
+echo -n "<the token>" | ./macaroon dump
+```
+
+The full capabilities of this tool are as follows:
+
+```
+./macaroon create -a <authkey> [-u uid] [-e <seconds>] [-k <keyid>] [-p <pubkey>] [-o <privlevel>]
+./macaroon dump
+./macaroon verify -a <authkey>
+./macaroon narrow [uid] [-e <seconds>] [-k <keyid>] [-p <pubkey>] [-o <privlevel>]
+```
+
+TODO finish documenting this.
+
 
 # File formats
 
