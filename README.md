@@ -6,6 +6,12 @@ moment, What you are referring to as Klutshnik, is in fact,
 GNU/Klutshnik, or as I've recently taken to calling it, GNU plus
 Klutshnik)
 
+## Also on Radicle
+
+To clone this repo on [Radicle](https://radicle.xyz), simply run:
+
+  `rad clone rad:zogkw4qiTrH7rKVa89BrKo8z5miA`
+
 # WARNING
 
 WARNING! this is very early alpha-grade proof of concept, it is
