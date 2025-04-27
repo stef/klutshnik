@@ -109,6 +109,58 @@ requires 5 servers (possibly the number is 3 actually, this needs
 testing/confirmation). If you don't have that many devices to run
 klutshnik servers on, just run a couple of them on the same device.
 
+In the `test` directory there is a fully configured client/server (3-out-of-5)
+setup. If you have installed libklutshnik and the python cli client, and built
+the zig server, the following should work (and give you an idea how to use
+this): 
+
+```sh
+% cd test/servers
+% ./start-servers.sh
+
+# switch to a different terminal and go to klutshnik/test
+# create the key
+% klutshnik create "keyid1"
+
+# encrypt a message (this one only needs the public key locally)
+% echo "attack at dawn" | klutshnik encrypt "keyid1" >/tmp/klutshniked
+
+# decrypt the message (this one needs the key from the klutshnik server)
+% klutshnik decrypt </tmp/klutshniked
+
+# update the key on the klutshnik server
+% delta=$(klutshnik rotate "keyid1")
+
+# update the encryption on the encrypted file
+% echo /tmp/klutshniked | klutshnik update keyid1 $delta
+
+# decrypt with the new key
+% klutshnik decrypt </tmp/klutshniked
+
+# list who is authorized to operate on this key
+% klutshnik listusers "keyid1"
+
+# add a user that can update keys, but nothing else
+% klutshnik adduser keyid1 s2h1YmIdOnNCgk6BIdrbgh1jdeF/QwnaXzvHDLLypbM= update 
+
+# check that this user has been added
+% klutshnik listusers "keyid1" 
+
+# remove this user again
+% klutshnik deluser keyid1 s2h1YmIdOnNCgk6BIdrbgh1jdeF/QwnaXzvHDLLypbM= 
+
+# check that user has been removed
+% klutshnik listusers "keyid1"
+
+# delete the key
+% klutshnik delete "keyid1"
+
+# fail to decrypt the file without a key.
+% klutshnik decrypt </tmp/klutshniked
+
+# switch to the other console running the servers and quit them by pressing ^c
+```
+
 # example session
 
 ```
