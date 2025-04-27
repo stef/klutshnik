@@ -164,6 +164,7 @@ fn setSigHandler() void {
         posix.exit(99);
     };
 }
+
 fn expandpath(path: []const u8) [:0]u8 {
     if (path[0] != '~') {
         return allocator.dupeZ(u8, path) catch @panic("OOM");
@@ -311,6 +312,15 @@ fn load_pubkeys(path: []const u8) !KeyStore {
     return map;
 }
 
+fn ssl_file_missing(path: []const u8) noreturn {
+    warn("The SSL key at {s} is not a readable file. Make sure this is a proper ssl key.\n", .{path});
+    // todo
+    //warn("Our GettingStarted document gives simple example of how to do so.\n", .{});
+    //warn("Check out https://sphinx.pm/server_install.html .\n", .{});
+    warn("Aborting.\n", .{});
+    posix.exit(1);
+}
+
 fn loadcfg() anyerror!Config {
     @setCold(true);
 
@@ -407,6 +417,13 @@ fn loadcfg() anyerror!Config {
     cfg.noisekey    = if (env.get("KLUTSHNIK_NOISEKEY"))    |v| expandpath(v) else cfg.noisekey;
     cfg.record_salt = if (env.get("KLUTSHNIK_RECORD_SALT")) |v| try allocator.dupe(u8, v) else cfg.record_salt;
 
+    std.fs.cwd().access(cfg.ssl_key, .{}) catch {
+        ssl_file_missing(cfg.ssl_key);
+    };
+    std.fs.cwd().access(cfg.ssl_cert, .{}) catch {
+        ssl_file_missing(cfg.ssl_cert);
+    };
+
     if (cfg.verbose) {
         warn("cfg.address: {s}\n", .{cfg.address});
         warn("cfg.port: {}\n", .{cfg.port});
@@ -428,9 +445,12 @@ fn loadcfg() anyerror!Config {
 
     return cfg;
 }
-fn fail(s: *sslStream, cfg: *const Config) noreturn {
+
+/// whenever anything fails during the execution of the protocol the server sends
+/// "\x00\x04fail" to the client and terminates.
+fn fail(s: *sslStream) noreturn {
     @setCold(true);
-    if (cfg.verbose) {
+    if (DEBUG) {
         std.debug.dumpCurrentStackTrace(@frameAddress());
         warn("fail\n", .{});
         std.debug.dumpCurrentStackTrace(@returnAddress());
@@ -467,12 +487,12 @@ fn read_pkt(s: *sslStream) []u8 {
     return buf;
 }
 
-fn send_pkt(s: *sslStream, cfg: *const Config, msg: []u8) void {
+fn send_pkt(s: *sslStream, msg: []u8) void {
     var pkt: []u8 = allocator.alloc(u8, 2 + msg.len) catch @panic("oom");
     defer allocator.free(pkt);
     if (msg.len > (1 << 16) - 1) {
         warn("msg is too long: {}, max {}\n", .{ msg.len, (1 << 16) - 1 });
-        fail(s, cfg);
+        fail(s);
     }
     std.mem.writeInt(u16, pkt[0..2], @truncate(msg.len), std.builtin.Endian.big);
     @memcpy(pkt[2..], msg);
@@ -489,7 +509,7 @@ fn send_pkt(s: *sslStream, cfg: *const Config, msg: []u8) void {
     if (i == pkt.len) {
         s.flush() catch |e| {
             warn("failed to flush connection: {}\n", .{e});
-            fail(s, cfg);
+            fail(s);
         };
         return;
     }
@@ -608,8 +628,8 @@ fn loadx(cfg: *const Config, recid: []const u8, fieldid: []const u8, data: []u8)
 }
 
 fn dkg(cfg: *const Config, s: *sslStream, req: *const CreateReq) *const [sodium.crypto_sign_PUBLICKEYBYTES]u8 {
-    const ltsigkey: []const u8 = load(cfg, cfg.ltsigkey, sodium.crypto_sign_SECRETKEYBYTES) catch fail(s, cfg);
-    const noisekey: []const u8 = load(cfg, cfg.noisekey, sodium.crypto_scalarmult_SCALARBYTES) catch fail(s, cfg);
+    const ltsigkey: []const u8 = load(cfg, cfg.ltsigkey, sodium.crypto_sign_SECRETKEYBYTES) catch fail(s);
+    const noisekey: []const u8 = load(cfg, cfg.noisekey, sodium.crypto_scalarmult_SCALARBYTES) catch fail(s);
 
     var peer = workaround.new_stp_dkg_peerstate();
     defer workaround.del_stp_dkg_peerstate(@ptrCast(&peer));
@@ -623,7 +643,7 @@ fn dkg(cfg: *const Config, s: *sslStream, req: *const CreateReq) *const [sodium.
                                              @ptrCast(stp_ltpk));
     if (retsp != 0) {
         warn("failed to start stp-dkg peer (error code: {})\n", .{retsp});
-        fail(s, cfg);
+        fail(s);
     }
     const n = stp_dkg.stp_dkg_peerstate_n(@ptrCast(peer)); // @as(*stp_dkg.STP_DKG_PeerState, @ptrCast(peer)).n;
     const t = stp_dkg.stp_dkg_peerstate_t(@ptrCast(peer)); // @as(*stp_dkg.STP_DKG_PeerState, @ptrCast(peer)).t;
@@ -686,7 +706,7 @@ fn dkg(cfg: *const Config, s: *sslStream, req: *const CreateReq) *const [sodium.
                                         @alignCast(@ptrCast(peer_my_complaints.ptr)),
                                         @ptrCast(peer_last_ts.ptr))) {
         warn("invalid n/t parameters. aborting\n", .{});
-        fail(s, cfg);
+        fail(s);
     }
 
     while (stp_dkg.stp_dkg_peer_not_done(@ptrCast(peer)) != 0) {
@@ -700,7 +720,7 @@ fn dkg(cfg: *const Config, s: *sslStream, req: *const CreateReq) *const [sodium.
         if (msglen > 0) {
             _msg = read_pkt(s);
             if (msglen != _msg.len) {
-                fail(s, cfg);
+                fail(s);
             }
             msg = _msg.ptr;
         } else {
@@ -715,14 +735,14 @@ fn dkg(cfg: *const Config, s: *sslStream, req: *const CreateReq) *const [sodium.
         if (0 != ret) {
             warn("STP DKG failed with {} in step {}.\n", .{ ret, cur_step });
             stp_dkg.stp_dkg_peer_free(@ptrCast(peer));
-            fail(s, cfg);
+            fail(s);
         }
         if (resp.len > 0) {
             //if(DEBUG) {
             //    warn("\nsending: ",.{});
             //    utils.hexdump(resp[0..]);
             //}
-            send_pkt(s, cfg, resp);
+            send_pkt(s, resp);
         }
     }
     // todo handle cheaters
@@ -736,28 +756,28 @@ fn dkg(cfg: *const Config, s: *sslStream, req: *const CreateReq) *const [sodium.
 
     store(cfg, req.id[0..], "share", &share, true) catch |err| {
         log("failed to store share: {}\n", .{err}, req.id[0..]);
-        fail(s,cfg);
+        fail(s);
     };
     store(cfg, req.id[0..], "commitments", mem.sliceAsBytes(k_commitments), false) catch |err| {
         log("failed to store commitments: {}\n", .{err}, req.id[0..]);
-        fail(s,cfg);
+        fail(s);
     };
     store(cfg, req.id[0..], "sigkeys", mem.sliceAsBytes(lt_pks[1..]), false) catch |err| {
         log("failed to store long-term sig keys: {}\n", .{err}, req.id[0..]);
-        fail(s,cfg);
+        fail(s);
     };
     store(cfg, req.id[0..], "noisekeys", mem.sliceAsBytes(peer_noise_pks), false) catch |err| {
         log("failed to store long-term noise keys: {}\n", .{err}, req.id[0..]);
-        fail(s,cfg);
+        fail(s);
     };
     const params = [_]u8{n, t};
     store(cfg, req.id[0..], "params", &params, false) catch |err| {
         log("failed to store share setup: {}\n", .{err}, req.id[0..]);
-        fail(s,cfg);
+        fail(s);
     };
     store(cfg, req.id[0..], "owner", &lt_pks[0], false) catch |err| {
         log("failed to store owner sig pubkey: {}\n", .{err}, req.id[0..]);
-        fail(s,cfg);
+        fail(s);
     };
 
     var pki: [toprf.TOPRF_Share_BYTES]u8 = undefined;
@@ -769,14 +789,14 @@ fn dkg(cfg: *const Config, s: *sslStream, req: *const CreateReq) *const [sodium.
     };
     s.flush() catch |e| {
         warn("failed to flush connection: {}\n", .{e});
-        fail(s, cfg);
+        fail(s);
     };
     return &stp_ltpk[0];
 }
 
 fn toprf_update(cfg: *const Config, s: *sslStream, req: *const UpdateReq) void {
-    const ltsigkey: []const u8 = load(cfg, cfg.ltsigkey, sodium.crypto_sign_SECRETKEYBYTES) catch fail(s, cfg);
-    const noisekey: []const u8 = load(cfg, cfg.noisekey, sodium.crypto_scalarmult_SCALARBYTES) catch fail(s, cfg);
+    const ltsigkey: []const u8 = load(cfg, cfg.ltsigkey, sodium.crypto_sign_SECRETKEYBYTES) catch fail(s);
+    const noisekey: []const u8 = load(cfg, cfg.noisekey, sodium.crypto_scalarmult_SCALARBYTES) catch fail(s);
 
     var peer = workaround.new_toprf_update_peerstate();
     defer workaround.del_toprf_update_peerstate(@ptrCast(&peer));
@@ -792,7 +812,7 @@ fn toprf_update(cfg: *const Config, s: *sslStream, req: *const UpdateReq) void {
                                                   @ptrCast(&stp_ltpk));
     if (retsp != 0) {
         warn("failed to start toprf update peer (error code: {})\n", .{retsp});
-        fail(s, cfg);
+        fail(s);
     }
     // todo check if stp_ltpk is in authorized_keys
     utils.hexdump(&stp_ltpk);
@@ -800,7 +820,7 @@ fn toprf_update(cfg: *const Config, s: *sslStream, req: *const UpdateReq) void {
     var params: [2]u8 = undefined;
     loadx(cfg, req.id[0..], "params", &params) catch |err| {
         log("failed to load share setup: {}\n", .{err}, req.id[0..]);
-        fail(s,cfg);
+        fail(s);
     };
     const n = params[0];
     const t = params[1];
@@ -814,18 +834,18 @@ fn toprf_update(cfg: *const Config, s: *sslStream, req: *const UpdateReq) void {
     @memcpy(lt_pks[0][0..], stp_ltpk[0..]);
     loadx(cfg, req.id[0..], "sigkeys", mem.sliceAsBytes(lt_pks[1..])) catch |err| {
         log("failed to load long-term sig keys: {}\n", .{err}, req.id[0..]);
-        fail(s,cfg);
+        fail(s);
     };
     const noise_pks: [][sodium.crypto_scalarmult_BYTES]u8 = allocator.alloc([sodium.crypto_scalarmult_BYTES]u8, n) catch @panic("oom");
     defer allocator.free(noise_pks);
     loadx(cfg, req.id[0..], "noisekeys", mem.sliceAsBytes(noise_pks)) catch |err| {
         log("failed to load long-term noise keys: {}\n", .{err}, req.id[0..]);
-        fail(s,cfg);
+        fail(s);
     };
     var k0_share: [2]toprf.TOPRF_Share = undefined;
     loadx(cfg, req.id[0..], "share", mem.sliceAsBytes(&k0_share)) catch |err| {
         log("failed to load share: {}\n", .{err}, req.id[0..]);
-        fail(s,cfg);
+        fail(s);
     };
     const index: u8 = k0_share[0].index;
     // todo load commitments, note there might be less than commitments if we are dynamically expanding
@@ -833,7 +853,7 @@ fn toprf_update(cfg: *const Config, s: *sslStream, req: *const UpdateReq) void {
     defer allocator.free(k0_commitments);
     loadx(cfg, req.id[0..], "commitments", mem.sliceAsBytes(k0_commitments)) catch |err| {
         log("failed to load k0 commitments: {}\n", .{err}, req.id[0..]);
-        fail(s,cfg);
+        fail(s);
     };
 
     const noise_outs: []*tupdate.Noise_XK_session_t_s = allocator.alloc(*tupdate.Noise_XK_session_t_s, n) catch @panic("oom");
@@ -902,7 +922,7 @@ fn toprf_update(cfg: *const Config, s: *sslStream, req: *const UpdateReq) void {
                                              @alignCast(@ptrCast(peer_my_complaints.ptr)),
                                              @ptrCast(peer_last_ts.ptr))) {
         warn("invalid n/t parameters. aborting\n", .{});
-        fail(s, cfg);
+        fail(s);
     }
 
     while (tupdate.toprf_update_peer_not_done(@ptrCast(peer)) != 0) {
@@ -916,7 +936,7 @@ fn toprf_update(cfg: *const Config, s: *sslStream, req: *const UpdateReq) void {
         if (msglen > 0) {
             _msg = read_pkt(s);
             if (msglen != _msg.len) {
-                fail(s, cfg);
+                fail(s);
             }
             msg = _msg.ptr;
         } else {
@@ -931,14 +951,14 @@ fn toprf_update(cfg: *const Config, s: *sslStream, req: *const UpdateReq) void {
         if (0 != ret) {
             warn("TOPRF Update failed with {} in step {}.\n", .{ ret, cur_step });
             tupdate.toprf_update_peer_free(@ptrCast(peer));
-            fail(s, cfg);
+            fail(s);
         }
         if (resp.len > 0) {
             //if(DEBUG) {
             //    warn("\nsending: ",.{});
             //    utils.hexdump(resp[0..]);
             //}
-            send_pkt(s, cfg, resp);
+            send_pkt(s, resp);
         }
     }
 
@@ -949,13 +969,13 @@ fn toprf_update(cfg: *const Config, s: *sslStream, req: *const UpdateReq) void {
     }
     store(cfg, req.id[0..], "share", share, false) catch |err| {
         log("failed to store share: {}\n", .{err}, req.id[0..]);
-        fail(s,cfg);
+        fail(s);
     };
 
     const commitments = tupdate.toprf_update_peerstate_commitments(@ptrCast(peer))[0..sodium.crypto_scalarmult_ristretto255_BYTES*n];
     store(cfg, req.id[0..], "commitments", commitments, false) catch |err| {
         log("failed to store commitments: {}\n", .{err}, req.id[0..]);
-        fail(s,cfg);
+        fail(s);
     };
 
     var pki: [toprf.TOPRF_Share_BYTES]u8 = undefined;
@@ -967,7 +987,7 @@ fn toprf_update(cfg: *const Config, s: *sslStream, req: *const UpdateReq) void {
     };
     s.flush() catch |e| {
         warn("failed to flush connection: {}\n", .{e});
-        fail(s, cfg);
+        fail(s);
     };
 }
 
@@ -989,7 +1009,7 @@ fn handle_read_err(err: anyerror, s: *sslStream) noreturn {
     @panic("network error");
 }
 
-fn read_req(cfg: *const Config, s: *sslStream, comptime T: type, op: []const u8) anyerror!*T {
+fn read_req(s: *sslStream, comptime T: type, op: []const u8) anyerror!*T {
     var buf = allocator.alloc(u8, @sizeOf(T)) catch @panic("oom");
     const buflen = s.read(buf[0..]) catch |err| {
         handle_read_err(err, s);
@@ -998,7 +1018,7 @@ fn read_req(cfg: *const Config, s: *sslStream, comptime T: type, op: []const u8)
 
     if (buflen != buf.len) {
         log("invalid {s} request. aborting.\n", .{op}, "");
-        fail(s,cfg);
+        fail(s);
     }
     const req: *T = @ptrCast(buf[0..]);
 
@@ -1012,11 +1032,11 @@ fn auth(cfg: *const Config, s: *sslStream, op: KlutshnikPerms, pk: *ed25519.Publ
     var owner: [sodium.crypto_sign_PUBLICKEYBYTES]u8 = undefined;
     loadx(cfg, reqid, "owner", &owner) catch |err| {
         log("failed to load owner pubkey: {}\n", .{err}, reqid);
-        fail(s,cfg);
+        fail(s);
     };
     const owner_pk = ed25519.PublicKey.fromBytes(owner) catch |err| {
         log("invalid pubkey for owner {x:0>64}: {}\n", .{owner, err}, reqid);
-        fail(s, cfg);
+        fail(s);
     };
 
     const siglen = ed25519.Signature.encoded_length;
@@ -1027,26 +1047,26 @@ fn auth(cfg: *const Config, s: *sslStream, op: KlutshnikPerms, pk: *ed25519.Publ
         // auth file load
         const authfd = open(cfg, reqid, "auth") catch |err| {
             log("failed to open auth file: {}\n", .{err}, reqid);
-            fail(s,cfg);
+            fail(s);
         };
         var auth_size: u64 = undefined;
         if(authfd.stat()) |st| {
             auth_size = st.size;
         } else |err| {
             log("failed to stat auth file: {}\n", .{err}, reqid);
-            fail(s,cfg);
+            fail(s);
         }
         const authbuf= allocator.alloc(u8, auth_size) catch @panic("oom");
         var fr = authfd.reader();
         _ = fr.readAll(authbuf[0..]) catch |err| {
             log("failed to load auth file: {}\n", .{err}, reqid);
-            fail(s,cfg);
+            fail(s);
         };
         authfd.close();
         const auth_sig = ed25519.Signature.fromBytes(authbuf[0..siglen].*);
         auth_sig.verify(authbuf[siglen..], owner_pk) catch |err| {
             log("auth fail: {}\n", .{err}, reqbuf[0..sodium.crypto_generichash_BYTES]);
-            fail(s,cfg);
+            fail(s);
         };
 
         var ptr: usize = siglen;
@@ -1057,21 +1077,21 @@ fn auth(cfg: *const Config, s: *sslStream, op: KlutshnikPerms, pk: *ed25519.Publ
             ptr+=1;
             if(mem.eql(u8, authbuf[_pk.._pk+32],&pk.toBytes())) {
                 if(authbuf[perm] & @intFromEnum(op) == @intFromEnum(op)) break;
-                fail(s,cfg);
+                fail(s);
             }
         }
     }
 
     var nonce : [32]u8 = undefined;
     std.crypto.random.bytes(&nonce);
-    send_pkt(s, cfg, nonce[0..]);
+    send_pkt(s, nonce[0..]);
 
     const data = mem.concat(allocator, u8, &[_][]const u8{ reqbuf, nonce[0..] }) catch @panic("oom");
     const sigbuf = read_pkt(s);
     defer(allocator.free(sigbuf));
     if(sigbuf.len!=ed25519.Signature.encoded_length) {
         log("auth response signature has invalid size: {}\n", .{sigbuf.len}, reqbuf[0..sodium.crypto_generichash_BYTES]);
-        fail(s,cfg);
+        fail(s);
     }
     const sig = ed25519.Signature.fromBytes(sigbuf[0..siglen].*);
     sig.verify(data, pk.*) catch |err| {
@@ -1079,7 +1099,7 @@ fn auth(cfg: *const Config, s: *sslStream, op: KlutshnikPerms, pk: *ed25519.Publ
         warn("sig: ", .{}); utils.hexdump(sigbuf[0..siglen]);
         warn("data: ", .{}); utils.hexdump(data[0..]);
         warn("pk: ", .{}); utils.hexdump(&pk.toBytes());
-        fail(s,cfg);
+        fail(s);
     };
 
     log("successfully authenticated using pk {x:0>64}\n", .{std.fmt.fmtSliceHexLower(&pk.toBytes())}, reqbuf[0..sodium.crypto_generichash_BYTES]);
@@ -1097,12 +1117,12 @@ fn create(cfg: *const Config, s: *sslStream, req: *const CreateReq) void {
     const path = mem.concat(allocator, u8, &[_][]const u8{ cfg.datadir, "/", hexid[0..] }) catch @panic("oom");
     defer allocator.free(path);
 
-    if (utils.dir_exists(path)) fail(s, cfg);
+    if (utils.dir_exists(path)) fail(s);
 
     const owner_pk: *const [sodium.crypto_sign_PUBLICKEYBYTES]u8 = dkg(cfg, s, req);
     const pk = ed25519.PublicKey.fromBytes(owner_pk.*) catch |err| {
         log("invalid pubkey for owner {x:0>64}: {}\n", .{owner_pk, err}, &req.id);
-        fail(s, cfg);
+        fail(s);
     };
     const auth_buf = read_pkt(s);
     defer(allocator.free(auth_buf));
@@ -1110,11 +1130,11 @@ fn create(cfg: *const Config, s: *sslStream, req: *const CreateReq) void {
     const sig = ed25519.Signature.fromBytes(auth_buf[0..siglen].*);
     sig.verify(auth_buf[siglen..], pk) catch |err| {
         log("fail auth data not signed by owner: {}\n", .{err}, &req.id);
-        fail(s,cfg);
+        fail(s);
     };
     store(cfg, req.id[0..], "auth", auth_buf, false) catch |err| {
         log("failed to store auth: {}\n", .{err}, req.id[0..]);
-        fail(s,cfg);
+        fail(s);
     };
     log("success creating new key for owner {}\n", .{std.fmt.fmtSliceHexLower(owner_pk)}, &req.id);
 }
@@ -1122,7 +1142,7 @@ fn create(cfg: *const Config, s: *sslStream, req: *const CreateReq) void {
 fn update(cfg: *const Config, s: *sslStream, req: *const UpdateReq) void {
     var pk = ed25519.PublicKey.fromBytes(req.pk) catch |err| {
         log("invalid pubkey in update request: {}\n", .{err}, req.id[0..]);
-        fail(s,cfg);
+        fail(s);
     };
     auth(cfg, s, KlutshnikPerms.UPDATE, &pk, mem.asBytes(req));
 
@@ -1137,7 +1157,7 @@ fn update(cfg: *const Config, s: *sslStream, req: *const UpdateReq) void {
     const path = mem.concat(allocator, u8, &[_][]const u8{ cfg.datadir, "/", hexid[0..] }) catch @panic("oom");
     defer allocator.free(path);
 
-    if(!utils.dir_exists(path)) fail(s, cfg);
+    if(!utils.dir_exists(path)) fail(s);
 
     toprf_update(cfg, s, req);
     log("success updating key by {}\n", .{std.fmt.fmtSliceHexLower(&req.pk)}, &req.id);
@@ -1146,24 +1166,24 @@ fn update(cfg: *const Config, s: *sslStream, req: *const UpdateReq) void {
 fn decrypt(cfg: *const Config, s: *sslStream, req: *const DecryptReq) void {
     var pk = ed25519.PublicKey.fromBytes(req.pk) catch |err| {
         log("invalid pubkey in decrypt request: {}\n", .{err}, req.id[0..]);
-        fail(s,cfg);
+        fail(s);
     };
     auth(cfg, s, KlutshnikPerms.DECRYPT, &pk, mem.asBytes(req));
 
     var k0_share: [2]toprf.TOPRF_Share = undefined;
     loadx(cfg, req.id[0..], "share", mem.sliceAsBytes(&k0_share)) catch |err| {
         log("failed to load share: {}\n", .{err}, req.id[0..]);
-        fail(s,cfg);
+        fail(s);
     };
 
-    if(0==sodium.crypto_core_ristretto255_is_valid_point(&req.alpha)) fail(s,cfg);
+    if(0==sodium.crypto_core_ristretto255_is_valid_point(&req.alpha)) fail(s);
     var response: [2][1+sodium.crypto_core_ristretto255_BYTES]u8 = undefined;
     response[0][0]=k0_share[0].index;
     response[1][0]=k0_share[0].index;
-    if(0!=sodium.crypto_scalarmult_ristretto255(response[0][1..], &k0_share[0].value, &req.alpha)) fail(s,cfg);
+    if(0!=sodium.crypto_scalarmult_ristretto255(response[0][1..], &k0_share[0].value, &req.alpha)) fail(s);
 
-    if(0==sodium.crypto_core_ristretto255_is_valid_point(&req.verifier)) fail(s,cfg);
-    if(0!=sodium.crypto_scalarmult_ristretto255(response[1][1..], &k0_share[0].value, &req.verifier)) fail(s,cfg);
+    if(0==sodium.crypto_core_ristretto255_is_valid_point(&req.verifier)) fail(s);
+    if(0!=sodium.crypto_scalarmult_ristretto255(response[1][1..], &k0_share[0].value, &req.verifier)) fail(s);
 
     _ = s.write(mem.asBytes(response[0..])) catch |e| {
         warn("error: {}\n", .{e});
@@ -1171,7 +1191,7 @@ fn decrypt(cfg: *const Config, s: *sslStream, req: *const DecryptReq) void {
     };
     s.flush() catch |e| {
         warn("failed to flush connection: {}\n", .{e});
-        fail(s, cfg);
+        fail(s);
     };
     log("success decrypt by {}\n", .{std.fmt.fmtSliceHexLower(&req.pk)}, &req.id);
 }
@@ -1179,7 +1199,7 @@ fn decrypt(cfg: *const Config, s: *sslStream, req: *const DecryptReq) void {
 fn delete(cfg: *const Config, s: *sslStream, req: *const DeleteReq) void {
     var pk = ed25519.PublicKey.fromBytes(req.pk) catch |err| {
         log("invalid pubkey in delete request: {}\n", .{err}, req.id[0..]);
-        fail(s,cfg);
+        fail(s);
     };
     auth(cfg, s, KlutshnikPerms.DELETE, &pk, mem.asBytes(req));
 
@@ -1191,20 +1211,20 @@ fn delete(cfg: *const Config, s: *sslStream, req: *const DeleteReq) void {
     const path = mem.concat(allocator, u8, &[_][]const u8{ cfg.datadir, "/", hexid[0..] }) catch @panic("oom");
     defer allocator.free(path);
 
-    if (!utils.dir_exists(path)) fail(s, cfg);
+    if (!utils.dir_exists(path)) fail(s);
 
     std.fs.cwd().deleteTree(path) catch |err| {
         log("failed to delete record {s}: {}\n", .{path, err}, hexid);
-        fail(s, cfg);
+        fail(s);
     };
 
     _ = s.write("ok") catch |err| {
         log("failed to write confirmation of deletion: {}\n", .{err}, hexid);
-        fail(s,cfg);
+        fail(s);
     };
     s.flush() catch |err| {
         log("failed to flush confirmation of deletion: {}\n", .{err}, hexid);
-        fail(s,cfg);
+        fail(s);
     };
     log("success decrypt by {}\n", .{std.fmt.fmtSliceHexLower(&req.pk)}, &req.id);
 }
@@ -1218,7 +1238,7 @@ fn modauth(cfg: *const Config, s: *sslStream, req: *const ModAuthReq) void {
     const record = mem.concat(allocator, u8, &[_][]const u8{ cfg.datadir, "/", hexid[0..] }) catch @panic("oom");
     defer allocator.free(record);
 
-    if (!utils.dir_exists(record)) fail(s, cfg);
+    if (!utils.dir_exists(record)) fail(s);
 
     ////////
     var pk : ed25519.PublicKey = undefined;
@@ -1227,22 +1247,22 @@ fn modauth(cfg: *const Config, s: *sslStream, req: *const ModAuthReq) void {
     // auth file load
     const authfd = open(cfg, &req.id, "auth") catch |err| {
         log("failed to open auth file: {}\n", .{err}, &req.id);
-        fail(s,cfg);
+        fail(s);
     };
     var auth_size: u64 = undefined;
     if(authfd.stat()) |st| {
         auth_size = st.size;
     } else |err| {
         log("failed to stat auth file: {}\n", .{err}, &req.id);
-        fail(s,cfg);
+        fail(s);
     }
     const authbuf= allocator.alloc(u8, auth_size) catch @panic("oom");
     var fr = authfd.reader();
     _ = fr.readAll(authbuf[0..]) catch |err| {
         log("failed to load auth file: {}\n", .{err}, &req.id);
-        fail(s,cfg);
+        fail(s);
     };
-    send_pkt(s, cfg, authbuf);
+    send_pkt(s, authbuf);
 
     if(req.readonly == 1) {
         log("list auth success by {}\n", .{std.fmt.fmtSliceHexLower(&pk.toBytes())}, &req.id);
@@ -1256,12 +1276,12 @@ fn modauth(cfg: *const Config, s: *sslStream, req: *const ModAuthReq) void {
     const auth_sig = ed25519.Signature.fromBytes(authbuf2[0..siglen].*);
     auth_sig.verify(authbuf2[siglen..], pk) catch |err| {
         log("auth fail: {}\n", .{err}, req.id[0..]);
-        fail(s,cfg);
+        fail(s);
     };
 
     store(cfg, req.id[0..], "auth", authbuf2, false) catch |err| {
         log("failed to store auth: {}\n", .{err}, req.id[0..]);
-        fail(s,cfg);
+        fail(s);
     };
 
     log("mod auth success by {}\n", .{std.fmt.fmtSliceHexLower(&pk.toBytes())}, &req.id);
@@ -1275,41 +1295,41 @@ fn handler(cfg: *const Config, s: *sslStream) !void {
     const op = @as(KlutshnikOp, @enumFromInt(op_buf[0]));
     switch (op) {
         KlutshnikOp.CREATE => {
-            const req: *CreateReq = read_req(cfg, s, CreateReq, "create"[0..]) catch |e| {
+            const req: *CreateReq = read_req(s, CreateReq, "create"[0..]) catch |e| {
                 warn("read create request failed with {}", .{e});
-                fail(s, cfg);
+                fail(s);
             };
             defer allocator.free(@as(*[@sizeOf(CreateReq)]u8, @ptrCast(req)));
             create(cfg, s, req);
         },
         KlutshnikOp.DECRYPT => {
-            const req: *DecryptReq = read_req(cfg, s, DecryptReq, "decrypt"[0..]) catch |e| {
+            const req: *DecryptReq = read_req(s, DecryptReq, "decrypt"[0..]) catch |e| {
                 warn("read decrypt request failed with {}", .{e});
-                fail(s,cfg);
+                fail(s);
             };
             defer allocator.free(@as(*[@sizeOf(DecryptReq)]u8, @ptrCast(req)));
             decrypt(cfg, s, req);
         },
         KlutshnikOp.DELETE => {
-            const req: *DeleteReq = read_req(cfg, s, DeleteReq, "delete"[0..]) catch |e| {
+            const req: *DeleteReq = read_req(s, DeleteReq, "delete"[0..]) catch |e| {
                 warn("read delete request failed with {}", .{e});
-                fail(s,cfg);
+                fail(s);
             };
             defer allocator.free(@as(*[@sizeOf(DeleteReq)]u8, @ptrCast(req)));
             delete(cfg, s, req);
         },
         KlutshnikOp.UPDATE => {
-            const req: *UpdateReq = read_req(cfg, s, UpdateReq, "update"[0..]) catch |e| {
+            const req: *UpdateReq = read_req(s, UpdateReq, "update"[0..]) catch |e| {
                 warn("read update request failed with {}", .{e});
-                fail(s,cfg);
+                fail(s);
             };
             defer allocator.free(@as(*[@sizeOf(UpdateReq)]u8, @ptrCast(req)));
             update(cfg, s, req);
         },
         KlutshnikOp.MODAUTH => {
-            const req: *ModAuthReq = read_req(cfg, s, ModAuthReq, "mod auth"[0..]) catch |e| {
+            const req: *ModAuthReq = read_req(s, ModAuthReq, "mod auth"[0..]) catch |e| {
                 warn("read mod auth request failed with {}", .{e});
-                fail(s,cfg);
+                fail(s);
             };
             defer allocator.free(@as(*[@sizeOf(ModAuthReq)]u8, @ptrCast(req)));
             modauth(cfg, s, req);
@@ -1318,8 +1338,12 @@ fn handler(cfg: *const Config, s: *sslStream) !void {
             if (cfg.verbose) warn("{} invalid op({}). aborting.\n", .{ conn.address, op });
         },
     }
+    try s.close();
+    posix.exit(0);
 }
 
+/// classical forking server with tcp connection wrapped by bear ssl
+/// number of childs is configurable, as is the listening IP address and port
 pub fn main() !void {
     try stdout.print("starting up klutshnik server\n", .{});
     try bw.flush(); // don't forget to flush!
@@ -1368,8 +1392,12 @@ pub fn main() !void {
             //unreachable,
         },
     };
+    warn("{} listening on {}\n", .{std.os.linux.getpid(), addr});
 
-    const to = posix.timeval{ .tv_sec = cfg.timeout, .tv_usec = 0 };
+    const to = posix.timeval{
+        .tv_sec = cfg.timeout,
+        .tv_usec = 0
+    };
     try posix.setsockopt(srv.stream.handle, posix.SOL.SOCKET, posix.SO.SNDTIMEO, mem.asBytes(&to));
     try posix.setsockopt(srv.stream.handle, posix.SOL.SOCKET, posix.SO.RCVTIMEO, mem.asBytes(&to));
 
@@ -1378,6 +1406,7 @@ pub fn main() !void {
     while (true) {
         if (srv.accept()) |c| {
             conn = c;
+            log("new connection\n", .{}, "");
         } else |e| {
             if (e == error.WouldBlock) {
                 while (true) {
@@ -1395,9 +1424,9 @@ pub fn main() !void {
         }
 
         while (kids.count() >= cfg.max_kids) {
-            if (cfg.verbose) warn("waiting for kid to die\n", .{});
+            log("pool full, waiting for kid to die\n", .{}, "");
             const pid = posix.waitpid(-1, 0).pid;
-            if (cfg.verbose) warn("wait returned: {}\n", .{pid});
+            log("wait returned: {}\n", .{pid}, "");
             kids.remove(mem.asBytes(&pid));
         }
 
