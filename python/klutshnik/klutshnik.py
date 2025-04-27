@@ -508,7 +508,7 @@ def usage(params, help=False):
 cmds = {'create'   : {'cmd': create,    'net': True,  'params': 3},
         'rotate'   : {'cmd': rotate,    'net': True,  'params': 3},
         'encrypt'  : {'cmd': encrypt,   'net': False, 'params': 3},
-        'decrypt'  : {'cmd': decrypt,   'net': True,  'params': 3},
+        'decrypt'  : {'cmd': decrypt,   'net': True,  'params': 2},
         'update'   : {'cmd': update,    'net': False, 'params': 4},
         'delete'   : {'cmd': delete,    'net': True,  'params': 3},
         'adduser'  : {'cmd': adminauth, 'net': True,  'params': 5},
