@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-# SPDX-FileCopyrightText: 2023, Marsiske Stefan
+# SPDX-FileCopyrightText: 2023-25, Marsiske Stefan
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import os
@@ -14,8 +14,8 @@ def read(fname):
     return open(os.path.join(os.path.dirname(__file__), fname)).read()
 
 setup(name = 'klutshnik',
-      version = '0.0.3',
-      description = 'Klutshnik (and OPRF) CLI client',
+      version = '0.1.0',
+      description = 'Klutshnik CLI client',
       license = "GPLv3",
       author = 'Stefan Marsiske',
       author_email = 'klutshnik@ctrlc.hu',
@@ -23,7 +23,7 @@ setup(name = 'klutshnik',
       long_description=read('README.org'),
       long_description_content_type="text/markdown",
       packages = ['klutshnik'],
-      install_requires = ("pysodium", 'dissononce', 'opaquestore'),
+      install_requires = ("pysodium", "pyoprf"),
       classifiers = ["Development Status :: 4 - Beta",
                      "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
                      "Topic :: Security :: Cryptography",
@@ -31,8 +31,8 @@ setup(name = 'klutshnik',
                      ],
       entry_points = {
           'console_scripts': [
-              'klutshnik = klutshnik.client:main',
-              'genkey25519 = klutshnik.genkey:main'
+              'klutshnik = klutshnik.klutshnik:main',
+              #'genkey25519 = klutshnik.klutshnik:genkey'
           ],
       },
 )

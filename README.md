@@ -54,34 +54,16 @@ which:
 
 # Dependencies
 
-This code depends on liboprf[1], libsodium[2], pysodium[3], hacl-star[4] and dissononce[5].
-
-Furthermore the authentication tokens will be automatically stored and
-retrieved from an opaque-store[6].
+This code depends on liboprf[1], libsodium[2], pysodium[3]
 
 [1] https://github.com/stef/liboprf/
 [2] https://github.com/jedisct1/libsodium
-[3] https://github.com/stef/pysodium
-[4] https://github.com/project-everest/hacl-star
-[5] https://github.com/tgalal/dissononce
-[6] https://github.com/stef/opaque-store/
+[2] https://github.com/stef/pysodium
 
 # Building
 
-You need to install libsodium-dev, dissononce and pysodium, with
+You need to install libsodium-dev, pysodium, with
 whatever tools your OS provides you with.
-
-First of all you need to get hacl-star and export an environment
-variable pointing to it:
-
-```
-git clone https://github.com/project-everest/hacl-star
-export HACL_HOME=$(pwd)/hacl-star
-```
-
-Only some header files are needed, so you don't have to build it.
-
-Then the other deps:
 
 ## liboprf
 
@@ -94,8 +76,6 @@ cd liboprf
 # you can use the PREFIX environment variable to set the install location to a writable directory
 export PREFIX=/path/preferred/oprf/location
 make install
-cp liboprf.so /usr/lib # or wherever your OS stores libs
-# on glibc based systems also run:
 # ldconfig
 # go back to $buildroot
 cd ..
@@ -107,7 +87,6 @@ cd ..
 # in directory $buildroot
 git clone https://github.com/stef/klutshnik
 cd klutshnik
-export OPRF_HOME=$PREFIX # match OPRF install location from previous step
 make
 ```
 

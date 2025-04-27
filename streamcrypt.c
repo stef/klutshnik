@@ -20,19 +20,20 @@ int stream_encrypt(const int infd,
                    const int outfd,
                    const uint8_t dek[crypto_secretbox_KEYBYTES]) {
   uint8_t nonce[crypto_secretbox_NONCEBYTES]={0};
-  // synthetically derive nonce from w
   randombytes_buf(nonce, crypto_secretbox_NONCEBYTES/2);
   write(outfd,nonce,crypto_secretbox_NONCEBYTES/2);
 
   uint8_t buf[BLOCK_SIZE + crypto_secretbox_MACBYTES];
-  ssize_t buf_len;
+  ssize_t res;
+  size_t buf_len;
 
   while(1) {
-    buf_len = read(infd, buf, BLOCK_SIZE);
-    if(buf_len==-1) {
+    res = read(infd, buf, BLOCK_SIZE);
+    if(res<0) {
       perror("failed to read plaintext from filedescriptor");
       return 1;
     }
+    buf_len = (size_t) res;
     if(buf_len != BLOCK_SIZE) {
       // last block
       //fprintf(stderr,"%ld != %d\n", buf_len, BLOCK_SIZE);
@@ -53,7 +54,7 @@ int stream_encrypt(const int infd,
     // nonce[half:-1]++
     sodium_increment(nonce + crypto_secretbox_NONCEBYTES/2, crypto_secretbox_NONCEBYTES/2 - 1);
     int overflow=0;
-    for(int i=0;i<crypto_secretbox_NONCEBYTES/2 - 1;i++) overflow|=nonce[crypto_secretbox_NONCEBYTES/2+i];
+    for(unsigned i=0;i<crypto_secretbox_NONCEBYTES/2 - 1;i++) overflow|=nonce[crypto_secretbox_NONCEBYTES/2+i];
     if(overflow==0) {
       fail("nonce overflow");
       return 1;
@@ -66,18 +67,19 @@ int stream_decrypt(const int infd,
                    const int outfd,
                    const uint8_t dek[crypto_secretbox_KEYBYTES]) {
   uint8_t nonce[crypto_secretbox_NONCEBYTES]={0};
-  // synthetically derive nonce from w
   read(infd,nonce,crypto_secretbox_NONCEBYTES/2);
 
-  ssize_t buf_len;
+  ssize_t res;
+  size_t buf_len;
   uint8_t buf[BLOCK_SIZE + crypto_secretbox_MACBYTES];
 
   while(1) {
-    buf_len = read(infd, buf, sizeof buf);
-    if(buf_len<0) {
+    res = read(infd, buf, sizeof buf);
+    if(res<0) {
       perror("failed to read ciphertext from filedescriptor");
       return 1;
     }
+    buf_len = (size_t) res;
     if((size_t) buf_len < sizeof buf) {
       // final block
       nonce[sizeof nonce - 1] = 1;
@@ -103,7 +105,7 @@ int stream_decrypt(const int infd,
     // nonce[half:-1]++
     sodium_increment(nonce + crypto_secretbox_NONCEBYTES/2, crypto_secretbox_NONCEBYTES/2 - 1);
     int overflow=0;
-    for(int i=0;i<crypto_secretbox_NONCEBYTES/2 - 1;i++) overflow|=nonce[crypto_secretbox_NONCEBYTES/2+i];
+    for(unsigned i=0;i<crypto_secretbox_NONCEBYTES/2 - 1;i++) overflow|=nonce[crypto_secretbox_NONCEBYTES/2+i];
     if(overflow==0) {
       fail("nonce overflow");
       return 1;

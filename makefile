@@ -1,43 +1,98 @@
-INCLUDES=-I$(OPRF_HOME)/include/oprf -IXK_25519_ChaChaPoly_BLAKE2b -I$(HACL_HOME)/dist/karamel/include -I$(HACL_HOME)/dist/karamel/krmllib/dist/minimal
-CFLAGS=-march=native -Wall -O2 -g -fstack-protector-strong -DWITH_SODIUM -D_FORTIFY_SOURCE=2 \
+INCLUDES=$(shell pkgconf --cflags liboprf)
+CFLAGS?=-march=native -Wall -O2 -g \
+       -fstack-protector-strong -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=3 \
+       -Wformat=2 -Wconversion -Wimplicit-fallthrough \
 		 -fasynchronous-unwind-tables -fpic -fstack-clash-protection -fcf-protection=full \
 		 -Werror=format-security -Werror=implicit-function-declaration -Wl,-z,defs -Wl,-z,relro \
-		 -ftrapv -Wl,-z,noexecstack $(INCLUDES)
-LDFLAGS=$(OPRF_HOME)/lib/liboprf.a XK_25519_ChaChaPoly_BLAKE2b/libnoiseapi.a -lsodium
-CC=gcc
-SOEXT=so
-STATICEXT=a
+		 -ftrapv -Wl,-z,noexecstack $(INCLUDES) -D_BSD_SOURCE -D_DEFAULT_SOURCE
 
-all: libkms.so kms macaroon
+#LDFLAGS?=/usr/lib/liboprf.a /usr/lib/liboprf-noiseXK.a -lsodium
+LDFLAGS?=-loprf -lsodium
+CC?=gcc
+SOEXT?=so
+STATICEXT?=a
+SOVER=0
 
-asan: CFLAGS=-fsanitize=address -static-libasan -g -march=native -Wall -O2 -DWITH_SODIUM \
+UNAME := $(shell uname -s)
+ARCH := $(shell uname -m)
+ifeq ($(UNAME),Darwin)
+   SOEXT=dylib
+   SOFLAGS=-Wl,-install_name,$(DESTDIR)$(PREFIX)/lib/libklutshnik.$(SOEXT)
+else
+   CFLAGS+=-Wl,-z,defs -Wl,-z,relro -Wl,-z,noexecstack -Wl,-z,now -Wtrampolines \
+           -fsanitize=signed-integer-overflow -fsanitize-undefined-trap-on-error
+           #-fstrict-flex-arrays=3 -mbranch-protection=standard
+   SOEXT=so
+   SOFLAGS=-Wl,-soname,libklutshnik.$(SOEXT).$(SOVER)
+   ifeq ($(ARCH),x86_64)
+      CFLAGS+=-fcf-protection=full
+   endif
+
+   ifeq ($(ARCH),parisc64)
+   else ifeq ($(ARCH),parisc64)
+   else
+      CFLAGS+=-fstack-clash-protection
+   endif
+endif
+
+
+all: libklutshnik.so libklutshnik.pc
+
+asan: CFLAGS=-fsanitize=address -static-libasan -g -march=native -Wall -O2 \
 	-g -fstack-protector-strong -fpic -fstack-clash-protection -fcf-protection=full \
 	-Werror=format-security -Werror=implicit-function-declaration -Wl, -z,noexecstack
 asan: LDFLAGS+= -fsanitize=address -static-libasan
 asan: all
 
-libkms.so: tuokms.c uokms.c thmult.c matrices.c common.c utils.c streamcrypt.c
-	$(CC) -shared $(CFLAGS) -Wl,-soname,libkms.so -o libkms.$(SOEXT) $^ $(LDFLAGS)
+SOURCES=streamcrypt.c tuokms.c
+OBJECTS=$(patsubst %.c,%.o,$(SOURCES))
 
-kms: server.c noise.o macaroon.c XK_25519_ChaChaPoly_BLAKE2b/libnoiseapi.a
-	gcc $(CFLAGS) -o $@ $^ $(LDFLAGS) -L. -lkms
+libklutshnik.$(SOEXT): $(SOURCES)
+	$(CC) -fPIC -shared $(CPPFLAGS) $(CFLAGS) $(SOFLAGS) -o libklutshnik.$(SOEXT) $^ $(LDFLAGS)
 
-noise.o: noise.c
-	gcc -c $(CFLAGS) -o $@ $^
+libklutshnik.$(STATICEXT): $(OBJECTS)
+	$(AR) rcs $@ $^
 
-tuokms: tuokms.c thmult.c matrices.c common.c utils.c
-	gcc $(CFLAGS) -o $@ $^ $(LDFLAGS)
+libklutshnik.pc:
+	echo "prefix=$(PREFIX)" >libklutshnik.pc
+	cat libklutshnik.pc0 >>libklutshnik.pc
 
-uokms: uokms.c common.c utils.c
-	gcc $(CFLAGS) -o $@ $^ $(LDFLAGS)
+install: $(DESTDIR)$(PREFIX)/lib/libklutshnik.$(SOEXT) \
+         $(DESTDIR)$(PREFIX)/lib/libklutshnik.$(STATICEXT) \
+         $(DESTDIR)$(PREFIX)/lib/pkgconfig/libklutshnik.pc \
+         $(DESTDIR)$(PREFIX)/include/klutshnik/streamcrypt.h \
+         $(DESTDIR)$(PREFIX)/include/klutshnik/tuokms.h
 
-macaroon: macaroon.c utils.c
-	gcc $(CFLAGS) -DWITH_MAIN -o $@ $^ -lsodium
+uninstall: $(DESTDIR)$(PREFIX)/lib/libklutshnik.$(SOEXT) $(DESTDIR)$(PREFIX)/lib/libklutshnik.$(STATICEXT) \
+	        $(DESTDIR)$(PREFIX)/include/klutshnik/streamcrypt.h $(DESTDIR)$(PREFIX)/include/klutshnik/tuokms.h \
+	rm $^
+	rmdir $(PREFIX)/include/klutshnik/
 
-XK_25519_ChaChaPoly_BLAKE2b/libnoiseapi.a: XK_25519_ChaChaPoly_BLAKE2b/XK.c XK_25519_ChaChaPoly_BLAKE2b/Noise_XK.c 
-	$(MAKE) -C XK_25519_ChaChaPoly_BLAKE2b libnoiseapi.a
+$(DESTDIR)$(PREFIX)/lib/libklutshnik.$(SOEXT): libklutshnik.$(SOEXT)
+	mkdir -p $(DESTDIR)$(PREFIX)/lib
+	cp $< $@.$(SOVER)
+	ln -sf $@.$(SOVER) $@
+
+$(DESTDIR)$(PREFIX)/lib/libklutshnik.$(STATICEXT): libklutshnik.$(STATICEXT)
+	mkdir -p $(DESTDIR)$(PREFIX)/lib
+	cp $< $@
+
+$(DESTDIR)$(PREFIX)/lib/pkgconfig/libklutshnik.pc: libklutshnik.pc
+	mkdir -p $(DESTDIR)$(PREFIX)/lib/pkgconfig
+	cp $< $@
+
+$(DESTDIR)$(PREFIX)/include/klutshnik/streamcrypt.h: streamcrypt.h
+	mkdir -p $(DESTDIR)$(PREFIX)/include/klutshnik
+	cp $< $@
+
+$(DESTDIR)$(PREFIX)/include/klutshnik/tuokms.h: tuokms.h
+	mkdir -p $(DESTDIR)$(PREFIX)/include/klutshnik
+	cp $< $@
+
+test: libklutshnik.$(SOEXT) libklutshnik.$(STATICEXT)
+	make -C tests tests
 
 clean:
-	@rm -f *.o tuokms uokms kms 
+	@rm -f *.o libklutshnik.$(STATICEXT) libklutshnik.$(SOEXT) libklutshnik.pc
 
 PHONY: clean
