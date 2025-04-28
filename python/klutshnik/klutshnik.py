@@ -122,7 +122,7 @@ def readall(fd, size):
         remaining-= len(d)
     return b''.join(data)
 
-def loadkey(keyid):
+def loadkeymeta(keyid):
   keyid=keyid.hex()
   try:
     with open(f"{config['keystore']}/{keyid}", 'rb') as fd:
@@ -133,6 +133,17 @@ def loadkey(keyid):
       return pki, threshold, pkis
   except FileNotFoundError:
     raise ValueError("unknown keyid")
+
+def getltsigkey():
+  if 'ltsigkey' in config:
+    with open(config['ltsigkey'],'rb') as fd:
+      sk = fd.read()
+    return sk
+  prefix = os.read(0, 6)
+  if not prefix == b"kltsk-": raise ValueError("invalid long-term sig key on stdin")
+  sk = a2b_base64(os.read(0, 88))
+  if len(sk)!=64: raise ValueError("invalid long-term sig key on stdin")
+  return sk
 
 #### OPs ####
 
@@ -153,8 +164,7 @@ def create(m, keyid):
         raise ValueError(f"long-term signature key for server {name} is of incorrect size")
       sig_pks.append(peer_lt_pk)
 
-  with open(config['ltsigkey'],'rb') as fd:
-    sig_sks = fd.read()
+  sig_sks = getltsigkey()
 
   stp, msg0 = pyoprf.stp_dkg_start_stp(n, t, ts_epsilon, "klutshnik v1.0 stp dkg", sig_pks, sig_sks)
   for i, peer in enumerate(m):
@@ -231,15 +241,14 @@ def rotate(m, keyid, force=False):
         raise ValueError(f"long-term signature key for server {name} is of incorrect size")
       sig_pks.append(peer_lt_pk)
 
-  with open(config['ltsigkey'],'rb') as fd:
-    sig_sks = fd.read()
+  sig_sks = getltsigkey()
 
   stp, msg0 = pyoprf.tupdate_start_stp(n, t, ts_epsilon, "klutshnik update", sig_pks, keyid, sig_sks)
   for i, peer in enumerate(m):
     pkid = pysodium.crypto_generichash(str(i).encode('utf8') + keyid)
     m.send(i, op+pkid+msg0+sig_pks[0])
 
-  auth(m, keyid, [msg0+sig_pks[0]] * len(m))
+  auth(m, keyid, [msg0+sig_pks[0]] * len(m), sig_sks)
 
   while pyoprf.tupdate_stp_not_done(stp):
     cur_step = pyoprf.tupdate_stpstate_step(stp)
@@ -294,17 +303,19 @@ def rotate(m, keyid, force=False):
   return b2a_base64(delta).decode('utf8').strip()
 
 def encrypt(keyid):
-   yc, _, _ = loadkey(keyid)
+   yc, _, _ = loadkeymeta(keyid)
    os.write(1, keyid)
    klutshniklib.klutshnik_stream_encrypt(yc, 0, 1)
    return True
 
 def decrypt(m):
+  sk = getltsigkey()
+  
   with open(config['ltsigpub'],'rb') as fd:
     sigpk = fd.read()
 
   keyid = os.read(0, KEYID_SIZE)
-  pubkey, t, pkis = loadkey(keyid)
+  pubkey, t, pkis = loadkeymeta(keyid)
 
   w = os.read(0, pysodium.crypto_core_ristretto255_BYTES)
   if not pysodium.crypto_core_ristretto255_is_valid_point(w): raise ValueError("w value is invalid")
@@ -324,7 +335,7 @@ def decrypt(m):
     pkid = pysodium.crypto_generichash(str(i).encode('utf8') + keyid)
     m.send(i, DECRYPT+pkid+msg+sigpk)
 
-  auth(m, keyid, [msg+sigpk] * len(m))
+  auth(m, keyid, [msg+sigpk] * len(m), sk)
 
   # receive responses from tuokms_evaluate
   resps = tuple((pkt[:33], pkt[33:]) for pkt in m.gather(33*2) if pkt is not None)
@@ -403,7 +414,7 @@ def delete(m, keyid, force=False):
 
   return ret
 
-def auth(m, keyid, reqbufs):
+def auth(m, keyid, reqbufs, sk = None):
   sizes = tuple(p for p in m.gather(2) if struct.unpack(">H", p)[0] != 32)
   if sizes != tuple(): raise ValueError("failed to receive auth nonces")
 
@@ -411,8 +422,8 @@ def auth(m, keyid, reqbufs):
   if len(nonces) != len(m):
     raise ValueError("only {len(nonces)} out of {len(m)} peers responded with auth nonces")
 
-  with open(config['ltsigkey'],'rb') as fd:
-    sk = fd.read()
+  if sk is None:
+    sk = getltsigkey()
 
   for i, nonce in enumerate(nonces):
     pkid = pysodium.crypto_generichash(str(i).encode('utf8') + keyid)
@@ -441,7 +452,9 @@ def adminauth(m, keyid, op, pubkey=None, rights=None):
     pkid = pysodium.crypto_generichash(str(i).encode('utf8') + keyid)
     m.send(i, MODAUTH+pkid+opcode)
 
-  auth(m, keyid, [opcode] * len(m))
+  sig_sks = getltsigkey()
+
+  auth(m, keyid, [opcode] * len(m), sig_sks)
 
   sizes = tuple(struct.unpack(">H", p)[0] for p in m.gather(2) if p is not None)
   if len(sizes) != len(m): raise ValueError("failed to receive auth blob sizes")
@@ -465,6 +478,7 @@ def adminauth(m, keyid, op, pubkey=None, rights=None):
 
   items = {bytes(e[:32]): e[32]&0xf for e in split_by_n(data, pysodium.crypto_sign_PUBLICKEYBYTES+1)}
   if op == 'list':
+    clearmem(sig_sks)
     for pk, p in items.items():
         print(pk.hex(), perm_str[p])
     return True
@@ -481,8 +495,6 @@ def adminauth(m, keyid, op, pubkey=None, rights=None):
 
   auth2 = b''.join(k+bytes([p]) for k,p in items.items())
 
-  with open(config['ltsigkey'],'rb') as fd:
-    sig_sks = fd.read()
   sig = pysodium.crypto_sign_detached(auth2,sig_sks)
   clearmem(sig_sks)
   msg = sig+auth2
@@ -492,13 +504,16 @@ def adminauth(m, keyid, op, pubkey=None, rights=None):
   return True
 
 def usage(params, help=False):
-  print("usage: %s " % params[0])
-  print("     %s create  <keyid>" % params[0])
+  print("usage:")
+  print("     %s create  <keyid> [<ltsigkey]" % params[0])
   print("     %s encrypt <keyid>" % params[0])
-  print("     %s decrypt"         % params[0])
-  print("     %s rotate  <keyid>" % params[0])
-  print("     %s delete  <keyid>" % params[0])
+  print("     %s decrypt [<ltsigkey]"         % params[0])
+  print("     %s rotate  <keyid> [<ltsigkey]" % params[0])
+  print("     %s delete  <keyid> [<ltsigkey]" % params[0])
   print("     %s update  <keyid> <delta>  <files2update" % params[0])
+  print("     %s adduser <keyid> <b64 pubkey> <owner,decrypt,update,delete> [<ltsigkey]" % params[0])
+  print("     %s deluser <keyid> <b64 pubkey> [<ltsigkey]" % params[0])
+  print("     %s listusers <keyid> [<ltsigkey]" % params[0])
 
   if help: sys.exit(0)
   sys.exit(100)
@@ -528,8 +543,8 @@ def main(params=sys.argv):
 
   op = cmds[params[1]]
 
-  #if params[1] == "genltsigkey":
-  #    sys.exit(genltsigkey(*params[2:]))
+  #if params[1] == "genkey":
+  #    sys.exit(genkey(*params[2:]))
 
   global config
   config = processcfg(getcfg('klutshnik'))
