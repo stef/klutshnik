@@ -136,7 +136,7 @@ def loadkeymeta(keyid):
 
 def getltsigkey():
   if 'ltsigkey' in config:
-    with open(config['ltsigkey'],'rb') as fd:
+    with open(config['ltsigkey_path'],'rb') as fd:
       sk = fd.read()
     return sk
   prefix = os.read(0, 6)
@@ -147,6 +147,41 @@ def getltsigkey():
 
 #### OPs ####
 
+def init():
+   if not os.path.exists(config['keystore']):
+      os.makedirs(config['keystore'], mode=0o700)
+      print(f"Created missing directory for keystore at '{config['keystore']}'.", file=sys.stderr)
+
+   if 'ltsigkey_path' not in config:
+      print(f"The `ltsigkey` configuration value is not set\n."
+            f"Please uncomment the line and use the default or some prefered path to store this private key.\n"
+            f"aborting.",
+            file=sys.stderr)
+      return False
+   if os.path.exists(config['ltsigkey_path']):
+      print(f"{config['ltsigkey_path']} exists, refusing to overwrite.\n"
+            f"if you want to generate a new one, delete the old one first.\n"
+            f"aborting",
+            file=sys.stderr)
+      return False
+   pk, sk = pysodium.crypto_sign_keypair()
+
+   with open(config['ltsigkey_path'], 'wb') as fd:
+     fd.write(sk)
+
+   print(f"Succsessfully generated long-term signing key pair.\n"
+         f"Stored the private key at '{config['ltsigkey_path']}'.\n"
+         f"Make sure you keep this key secure and have a backup.\n"
+         f"Your public key is:\n",
+         end="\n\t",
+         file=sys.stderr)
+   print(f"{b2a_base64(pk).decode('utf8').strip()}", flush=True)
+   print(f"\nplease add it to your configuration 'ltsigpub' variable\n"
+         f"and ask the admins of the KMS servers you have configured\n"
+         f"to add this to their authorized_keys file",
+         file=sys.stderr)
+   return True
+
 def create(m, keyid):
   op = CREATE
   n = len(m)
@@ -154,8 +189,7 @@ def create(m, keyid):
   ts_epsilon=config['ts_epsilon']
 
   # load peer long-term keys
-  with open(config['ltsigpub'],'rb') as fd:
-    sig_pks = [fd.read()]
+  sig_pks = [a2b_base64(config['ltsigpub'][6:])]
 
   for name, server in config['servers'].items():
     with open(server.get('ltsigkey'),'rb') as fd:
@@ -231,8 +265,7 @@ def rotate(m, keyid, force=False):
   ts_epsilon=config['ts_epsilon']
 
   # load peer long-term keys
-  with open(config['ltsigpub'],'rb') as fd:
-    sig_pks = [fd.read()]
+  sig_pks = [a2b_base64(config['ltsigpub'][6:])]
 
   for name, server in config['servers'].items():
     with open(server.get('ltsigkey'),'rb') as fd:
@@ -310,9 +343,7 @@ def encrypt(keyid):
 
 def decrypt(m):
   sk = getltsigkey()
-  
-  with open(config['ltsigpub'],'rb') as fd:
-    sigpk = fd.read()
+  sigpk = a2b_base64(config['ltsigpub'][6:])
 
   keyid = os.read(0, KEYID_SIZE)
   pubkey, t, pkis = loadkeymeta(keyid)
@@ -394,8 +425,7 @@ def update(keyid, delta):
 
 def delete(m, keyid, force=False):
   # load peer long-term keys
-  with open(config['ltsigpub'],'rb') as fd:
-    sigpk = fd.read()
+  sigpk = a2b_base64(config['ltsigpub'][6:])
 
   for i, peer in enumerate(m):
     pkid = pysodium.crypto_generichash(str(i).encode('utf8') + keyid)
@@ -465,8 +495,7 @@ def adminauth(m, keyid, op, pubkey=None, rights=None):
   if len(authblobs) != len(m): raise ValueError("failed to receive auth blob sizes")
   if len(set(authblobs)) != 1: raise ValueError("received inconsistent auth blob sizes")
 
-  with open(config['ltsigpub'],'rb') as fd:
-    pk = fd.read()
+  pk = a2b_base64(config['ltsigpub'][6:])
   authblob = tuple(set(authblobs))[0]
 
   sig = authblob[:pysodium.crypto_sign_BYTES]
@@ -520,7 +549,8 @@ def usage(params, help=False):
 
 #### main ####
 
-cmds = {'create'   : {'cmd': create,    'net': True,  'params': 3},
+cmds = {'init'     : {'cmd': init,      'net': False, 'params': 2},
+        'create'   : {'cmd': create,    'net': True,  'params': 3},
         'rotate'   : {'cmd': rotate,    'net': True,  'params': 3},
         'encrypt'  : {'cmd': encrypt,   'net': False, 'params': 3},
         'decrypt'  : {'cmd': decrypt,   'net': True,  'params': 2},
@@ -543,11 +573,9 @@ def main(params=sys.argv):
 
   op = cmds[params[1]]
 
-  #if params[1] == "genkey":
-  #    sys.exit(genkey(*params[2:]))
-
   global config
   config = processcfg(getcfg('klutshnik'))
+
   if debug:
     import ctypes
     libc = ctypes.cdll.LoadLibrary('libc.so.6')
@@ -564,7 +592,7 @@ def main(params=sys.argv):
     s.connect()
     args.append(s)
 
-  if cmd != decrypt:
+  if cmd not in {decrypt, init}:
     args.append(pysodium.crypto_generichash(params[2], k=config['id_salt']))
 
   if cmd == update:
