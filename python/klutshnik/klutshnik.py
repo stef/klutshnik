@@ -8,7 +8,7 @@ import pysodium, pyoprf
 from klutshnik.cfg import getcfg
 from SecureString import clearmem
 from pyoprf.multiplexer import Multiplexer
-from binascii import a2b_base64, b2a_base64
+from binascii import a2b_base64, b2a_base64, unhexlify
 from itertools import zip_longest
 
 import ctypes, ctypes.util
@@ -333,10 +333,33 @@ def rotate(m, keyid, force=False):
   pki = pyoprf.thresholdmult(pkis[:t])
   savekey(keyid, pki, pkis, t)
 
-  return b2a_base64(delta).decode('utf8').strip()
+  return f"KLUTSHNIK-{b2a_base64(delta).decode('utf8').strip()}"
 
-def encrypt(keyid):
-   yc, _, _ = loadkeymeta(keyid)
+def encrypt(param):
+   if isinstance(param, str) and param.startswith("KLUTSHNIK-"):
+      yc = a2b_base64(param[10:])
+      keyid = None
+   else:
+      keyid = param
+      yc = None
+
+   if yc is None: yc, _, _ = loadkeymeta(keyid)
+   if keyid is None:
+      if yc is None: raise ValueError("neither keyid nor pubkey provided")
+      # todo find keyid
+      with os.scandir(config['keystore']) as it:
+         for entry in it:
+            if len(entry.name) != 64: continue
+            try: kid = unhexlify(entry.name)
+            except: continue
+            with open(os.path.join(config['keystore'], entry.name), 'rb') as fd:
+               pubkey = readall(fd,34)[2:]
+            if pubkey == yc:
+               keyid=kid
+               break
+      if keyid is None:
+         raise ValueError("could not deduce keyid from pubkey")
+
    os.write(1, keyid)
    klutshniklib.klutshnik_stream_encrypt(yc, 0, 1)
    return True
@@ -404,7 +427,6 @@ def decrypt(m):
         raise ValueError("failed to recover from cheating")
 
   if(0!=klutshniklib.stream_decrypt(0,1,dek)): raise ValueError("message forged")
-
   return True
 
 def update(keyid, delta):
@@ -593,7 +615,10 @@ def main(params=sys.argv):
     args.append(s)
 
   if cmd not in {decrypt, init}:
-    args.append(pysodium.crypto_generichash(params[2], k=config['id_salt']))
+    if cmd == encrypt and params[2].startswith("KLUTSHNIK-"):
+       args.append(params[2])
+    else:
+       args.append(pysodium.crypto_generichash(params[2], k=config['id_salt']))
 
   if cmd == update:
     args.append(params[3])
