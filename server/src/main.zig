@@ -58,6 +58,7 @@ const KlutshnikOp = enum(u8) {
     /// KMS ops
     CREATE  = 0,
     UPDATE  = 0x33,
+    REFRESH = 0x55,
     DECRYPT = 0x66,
     DELETE  = 0xff,
 
@@ -100,6 +101,11 @@ const DecryptReq = extern struct {
 };
 
 const DeleteReq = extern struct {
+    id: [sodium.crypto_generichash_BYTES]u8 align(1),
+    pk: [sodium.crypto_sign_PUBLICKEYBYTES]u8 align(1),
+};
+
+const RefreshReq = extern struct {
     id: [sodium.crypto_generichash_BYTES]u8 align(1),
     pk: [sodium.crypto_sign_PUBLICKEYBYTES]u8 align(1),
 };
@@ -1318,6 +1324,46 @@ fn modauth(cfg: *const Config, s: *sslStream, req: *const ModAuthReq) void {
     log("mod auth success by {}\n", .{std.fmt.fmtSliceHexLower(&pk.toBytes())}, &req.id);
 }
 
+fn refresh(cfg: *const Config, s: *sslStream, req: *const RefreshReq) void {
+    var pk = ed25519.PublicKey.fromBytes(req.pk) catch |err| {
+        log("invalid pubkey in delete request: {}\n", .{err}, req.id[0..]);
+        fail(s);
+    };
+    const perm = @intFromEnum(KlutshnikPerms.OWNER) + @intFromEnum(KlutshnikPerms.UPDATE) + @intFromEnum(KlutshnikPerms.DECRYPT);
+    auth(cfg, s, perm, &pk, mem.asBytes(req));
+
+    var share: [2]toprf.TOPRF_Share = undefined;
+    loadx(cfg, req.id[0..], "share", mem.sliceAsBytes(&share)) catch |err| {
+        log("failed to load share: {}\n", .{err}, req.id[0..]);
+        fail(s);
+    };
+    var epoch: u32 = undefined;
+    loadx(cfg, req.id[0..], "epoch", mem.asBytes(&epoch)) catch |err| {
+        log("failed to load epoch: {}\n", .{err}, req.id[0..]);
+        fail(s);
+    };
+
+    var pki: [toprf.TOPRF_Share_BYTES]u8 = undefined;
+    pki[0]=share[0].index;
+    if(0!=sodium.crypto_scalarmult_ristretto255_base(pki[1..],&share[0].value)) @panic("invalid share generated");
+
+    var epoch_buf: [4]u8 = undefined;
+    std.mem.writeInt(u32, &epoch_buf, epoch, std.builtin.Endian.big);
+    _ = s.write(epoch_buf[0..]) catch |e| {
+        warn("error: {}\n", .{e});
+        @panic("network error");
+    };
+    _ = s.write(pki[0..]) catch |e| {
+        warn("error: {}\n", .{e});
+        @panic("network error");
+    };
+    s.flush() catch |e| {
+        warn("failed to flush connection: {}\n", .{e});
+        fail(s);
+    };
+    log("refresh success by {}\n", .{std.fmt.fmtSliceHexLower(&pk.toBytes())}, &req.id);
+}
+
 fn handler(cfg: *const Config, s: *sslStream) !void {
     var op_buf: [1]u8 = undefined;
     _ = s.read(op_buf[0..]) catch |err| {
@@ -1364,6 +1410,14 @@ fn handler(cfg: *const Config, s: *sslStream) !void {
             };
             defer allocator.free(@as(*[@sizeOf(ModAuthReq)]u8, @ptrCast(req)));
             modauth(cfg, s, req);
+        },
+        KlutshnikOp.REFRESH => {
+            const req: *RefreshReq = read_req(s, RefreshReq, "refresh"[0..]) catch |e| {
+                warn("read refresh request failed with {}", .{e});
+                fail(s);
+            };
+            defer allocator.free(@as(*[@sizeOf(RefreshReq)]u8, @ptrCast(req)));
+            refresh(cfg, s, req);
         },
         _ => {
             if (cfg.verbose) warn("{} invalid op({}). aborting.\n", .{ conn.address, op });
