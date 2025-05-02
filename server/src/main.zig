@@ -1048,7 +1048,7 @@ fn read_req(s: *sslStream, comptime T: type, op: []const u8) anyerror!*T {
     return req;
 }
 
-fn auth(cfg: *const Config, s: *sslStream, op: KlutshnikPerms, pk: *ed25519.PublicKey, reqbuf: []const u8) void {
+fn auth(cfg: *const Config, s: *sslStream, op: u8, pk: *ed25519.PublicKey, reqbuf: []const u8) void {
     const reqid = reqbuf[0..32];
 
     var owner: [sodium.crypto_sign_PUBLICKEYBYTES]u8 = undefined;
@@ -1062,7 +1062,7 @@ fn auth(cfg: *const Config, s: *sslStream, op: KlutshnikPerms, pk: *ed25519.Publ
     };
 
     const siglen = ed25519.Signature.encoded_length;
-    if(op==KlutshnikPerms.OWNER) {
+    if(op==@intFromEnum(KlutshnikPerms.OWNER)) {
         pk.* = owner_pk;
     } else {
         // check if pk has permission
@@ -1092,15 +1092,24 @@ fn auth(cfg: *const Config, s: *sslStream, op: KlutshnikPerms, pk: *ed25519.Publ
         };
 
         var ptr: usize = siglen;
+        var authorized: bool = false;
         while(ptr < auth_size) {
             const _pk = ptr;
             ptr += sodium.crypto_sign_PUBLICKEYBYTES;
             const perm = ptr;
             ptr+=1;
             if(mem.eql(u8, authbuf[_pk.._pk+32],&pk.toBytes())) {
-                if(authbuf[perm] & @intFromEnum(op) == @intFromEnum(op)) break;
+                if(authbuf[perm] & op != 0) {
+                    authorized = true;
+                    break;
+                }
+                log("unauthorized {x:0>64}\n", .{std.fmt.fmtSliceHexLower(&pk.toBytes())}, reqbuf[0..sodium.crypto_generichash_BYTES]);
                 fail(s);
             }
+        }
+        if(!authorized) {
+            log("unauthorized {x:0>64}\n", .{std.fmt.fmtSliceHexLower(&pk.toBytes())}, reqbuf[0..sodium.crypto_generichash_BYTES]);
+            fail(s);
         }
     }
 
@@ -1166,7 +1175,7 @@ fn update(cfg: *const Config, s: *sslStream, req: *const UpdateReq) void {
         log("invalid pubkey in update request: {}\n", .{err}, req.id[0..]);
         fail(s);
     };
-    auth(cfg, s, KlutshnikPerms.UPDATE, &pk, mem.asBytes(req));
+    auth(cfg, s, @intFromEnum(KlutshnikPerms.UPDATE), &pk, mem.asBytes(req));
 
     // we hash the id, with some local secret, so clients have no control over the record ids
     // we abuse the key here, because the salt is expected to be exactly 16B
@@ -1190,7 +1199,7 @@ fn decrypt(cfg: *const Config, s: *sslStream, req: *const DecryptReq) void {
         log("invalid pubkey in decrypt request: {}\n", .{err}, req.id[0..]);
         fail(s);
     };
-    auth(cfg, s, KlutshnikPerms.DECRYPT, &pk, mem.asBytes(req));
+    auth(cfg, s, @intFromEnum(KlutshnikPerms.DECRYPT), &pk, mem.asBytes(req));
 
     var k0_share: [2]toprf.TOPRF_Share = undefined;
     loadx(cfg, req.id[0..], "share", mem.sliceAsBytes(&k0_share)) catch |err| {
@@ -1223,7 +1232,7 @@ fn delete(cfg: *const Config, s: *sslStream, req: *const DeleteReq) void {
         log("invalid pubkey in delete request: {}\n", .{err}, req.id[0..]);
         fail(s);
     };
-    auth(cfg, s, KlutshnikPerms.DELETE, &pk, mem.asBytes(req));
+    auth(cfg, s, @intFromEnum(KlutshnikPerms.DELETE), &pk, mem.asBytes(req));
 
     var local_id = [_]u8{0} ** blake2b.digest_length;
     blake2b.hash(req.id[0..], &local_id, .{ .key = cfg.record_salt });
@@ -1264,7 +1273,7 @@ fn modauth(cfg: *const Config, s: *sslStream, req: *const ModAuthReq) void {
 
     ////////
     var pk : ed25519.PublicKey = undefined;
-    auth(cfg, s, KlutshnikPerms.OWNER, &pk,mem.asBytes(req));
+    auth(cfg, s, @intFromEnum(KlutshnikPerms.OWNER), &pk,mem.asBytes(req));
 
     // auth file load
     const authfd = open(cfg, &req.id, "auth") catch |err| {
