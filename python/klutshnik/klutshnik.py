@@ -25,6 +25,7 @@ KEYID_SIZE = pysodium.crypto_generichash_BYTES
 
 CREATE  =b'\x00'
 ROTATE  =b'\x33'
+REFRESH =b'\x55'
 DECRYPT =b'\x66'
 DELETE  =b'\xff'
 MODAUTH =b'\xaa'
@@ -103,10 +104,13 @@ def send_pkt(s, msg, i=None):
   else:
     s.send(i, plen+msg)
 
-def savekey(keyid, pubkey, pkis, threshold):
+def savekey(keyid, owner_pks, pubkey, pkis, threshold, epoch):
   keyid = keyid.hex()
   with open(f"{config['keystore']}/{keyid}", 'wb') as fd:
     fd.write(bytes([threshold, len(pkis)]))
+    fd.write(struct.pack('>I', epoch))
+    # save also owners ltsig pk
+    fd.write(owner_pks)
     fd.write(pubkey)
     fd.write(b''.join(pkis))
     fd.flush()
@@ -128,14 +132,17 @@ def loadkeymeta(keyid):
     with open(f"{config['keystore']}/{keyid}", 'rb') as fd:
       threshold = int(fd.read(1)[0])
       n = int(fd.read(1)[0])
+      epoch = struct.unpack('>I', fd.read(4))[0]
+      # load also owners ltsig pk
+      owner_pks = fd.read(pysodium.crypto_sign_PUBLICKEYBYTES)
       pki = fd.read(pysodium.crypto_core_ristretto255_BYTES)
       pkis = readall(fd, (pysodium.crypto_core_ristretto255_BYTES+1) * n)
-      return pki, threshold, pkis
+      return pki, owner_pks, epoch, threshold, pkis
   except FileNotFoundError:
     raise ValueError("unknown keyid")
 
 def getltsigkey():
-  if 'ltsigkey' in config:
+  if 'ltsigkey_path' in config:
     with open(config['ltsigkey_path'],'rb') as fd:
       sk = fd.read()
     return sk
@@ -175,7 +182,7 @@ def init():
          f"Your public key is:\n",
          end="\n\t",
          file=sys.stderr)
-   print(f"{b2a_base64(pk).decode('utf8').strip()}", flush=True)
+   print(f"LTSIGPK-{b2a_base64(pk).decode('utf8').strip()}", flush=True)
    print(f"\nplease add it to your configuration 'ltsigpub' variable\n"
          f"and ask the admins of the KMS servers you have configured\n"
          f"to add this to their authorized_keys file",
@@ -189,7 +196,7 @@ def create(m, keyid):
   ts_epsilon=config['ts_epsilon']
 
   # load peer long-term keys
-  sig_pks = [a2b_base64(config['ltsigpub'][6:])]
+  sig_pks = [a2b_base64(config['ltsigpub'][8:])]
 
   for name, server in config['servers'].items():
     with open(server.get('ltsigkey'),'rb') as fd:
@@ -249,23 +256,23 @@ def create(m, keyid):
   if len(pkis) != n:
     raise ValueError("only {len(pkis)} out of {n} peers responded with their pubkey shares")
   pki = pyoprf.thresholdmult(pkis[:t])
-  savekey(keyid, pki, pkis, t)
+  savekey(keyid, sig_pks[0], pki, pkis, t, 0)
 
   auth0 = sig_pks[0] + b'\x4f'
   sig = pysodium.crypto_sign_detached(auth0,sig_sks)
   for i in range(len(m)):
     send_pkt(m, sig+auth0, i)
 
-  return f"pk {b2a_base64(pki).decode('utf8').strip()}"
+  return f"KLCPK-{b2a_base64(keyid+b'\x00\x00\x00\x00'+pki).decode('utf8').strip()}"
 
 def rotate(m, keyid, force=False):
   op = ROTATE
   n = len(m)
-  t = config['threshold']
+  _, owner_pks, lepoch, t, _ = loadkeymeta(keyid)
   ts_epsilon=config['ts_epsilon']
 
   # load peer long-term keys
-  sig_pks = [a2b_base64(config['ltsigpub'][6:])]
+  sig_pks = [a2b_base64(config['ltsigpub'][8:])]
 
   for name, server in config['servers'].items():
     with open(server.get('ltsigkey'),'rb') as fd:
@@ -282,6 +289,7 @@ def rotate(m, keyid, force=False):
     m.send(i, op+pkid+msg0+sig_pks[0])
 
   auth(m, keyid, [msg0+sig_pks[0]] * len(m), sig_sks)
+  clearmem(sig_sks)
 
   while pyoprf.tupdate_stp_not_done(stp):
     cur_step = pyoprf.tupdate_stpstate_step(stp)
@@ -327,38 +335,27 @@ def rotate(m, keyid, force=False):
 
   delta = pyoprf.tupdate_stpstate_delta(stp)
 
-  pkis = tuple(p for p in m.gather(33) if p is not None)
-  if len(pkis) != n:
-    raise ValueError("only {len(pkis)} out of {n} peers responded with their pubkey shares")
+  resps = tuple(p for p in m.gather(4+33, proc=lambda x: (x[:4], x[4:])) if p is not None)
+  if len(resps) != n:
+    raise ValueError("only {len(resps)} out of {n} peers responded with their pubkey shares")
+  pkis = [x[1] for x in resps]
   pki = pyoprf.thresholdmult(pkis[:t])
-  savekey(keyid, pki, pkis, t)
 
-  return f"KLUTSHNIK-{b2a_base64(delta).decode('utf8').strip()}"
+  epoch = set(struct.unpack(">I", r[0])[0] for r in resps)
+  if len(epoch) != 1: raise ValueError(f"inconsistent epochs received: {tmp}")
+  epoch = tuple(epoch)[0]
+  if epoch <= lepoch: raise ValueError(f"locally cached epoch({lepoch}) is greater or equal to rotated epoch({epoch})")
 
-def encrypt(param):
-   if isinstance(param, str) and param.startswith("KLUTSHNIK-"):
-      yc = a2b_base64(param[10:])
-      keyid = None
-   else:
-      keyid = param
-      yc = None
+  savekey(keyid, owner_pks, pki, pkis, t, epoch)
 
-   if yc is None: yc, _, _ = loadkeymeta(keyid)
-   if keyid is None:
-      if yc is None: raise ValueError("neither keyid nor pubkey provided")
-      # todo find keyid
-      with os.scandir(config['keystore']) as it:
-         for entry in it:
-            if len(entry.name) != 64: continue
-            try: kid = unhexlify(entry.name)
-            except: continue
-            with open(os.path.join(config['keystore'], entry.name), 'rb') as fd:
-               pubkey = readall(fd,34)[2:]
-            if pubkey == yc:
-               keyid=kid
-               break
-      if keyid is None:
-         raise ValueError("could not deduce keyid from pubkey")
+  return f"KLCPK-{b2a_base64(keyid+resps[0][0]+pki).decode('utf8').strip()}\nKLCDELTA-{b2a_base64(resps[0][0]+delta).decode('utf8').strip()}"
+
+def encrypt(pk):
+   if not pk.startswith("KLCPK-"):
+      raise ValueError("invalid pubkey provided")
+   raw = a2b_base64(pk[6:])
+   keyid = raw[:KEYID_SIZE+4]
+   yc = raw[KEYID_SIZE+4:]
 
    os.write(1, keyid)
    klutshniklib.klutshnik_stream_encrypt(yc, 0, 1)
@@ -366,10 +363,15 @@ def encrypt(param):
 
 def decrypt(m):
   sk = getltsigkey()
-  sigpk = a2b_base64(config['ltsigpub'][6:])
+  sigpk = a2b_base64(config['ltsigpub'][8:])
 
   keyid = os.read(0, KEYID_SIZE)
-  pubkey, t, pkis = loadkeymeta(keyid)
+  fepoch = struct.unpack(">I", os.read(0, 4))[0]
+  pubkey, _, epoch, t, pkis = loadkeymeta(keyid)
+  if fepoch!=epoch:
+     if (fepoch > epoch):
+        raise ValueError(f"data is encrypted with a key from the future: {fepoch}, while we have {epoch}, try again after refreshing the local keymaterial.")
+     raise ValueError(f"data is encrypted with a key from {fepoch}, while we have {epoch}. Someone forgot to update the encryption on this data.")
 
   w = os.read(0, pysodium.crypto_core_ristretto255_BYTES)
   if not pysodium.crypto_core_ristretto255_is_valid_point(w): raise ValueError("w value is invalid")
@@ -390,6 +392,7 @@ def decrypt(m):
     m.send(i, DECRYPT+pkid+msg+sigpk)
 
   auth(m, keyid, [msg+sigpk] * len(m), sk)
+  clearmem(sk)
 
   # receive responses from tuokms_evaluate
   resps = tuple((pkt[:33], pkt[33:]) for pkt in m.gather(33*2) if pkt is not None)
@@ -429,8 +432,12 @@ def decrypt(m):
   if(0!=klutshniklib.stream_decrypt(0,1,dek)): raise ValueError("message forged")
   return True
 
-def update(keyid, delta):
-  delta = a2b_base64(delta)
+def update(keyid):
+  delta = sys.stdin.readline()
+  if not delta.startswith("KLCDELTA-"): raise ValueError("invalid delta format")
+  raw = a2b_base64(delta[9:])
+  epoch = struct.unpack(">I", raw[:4])[0]
+  delta = raw[4:]
   delta = pysodium.crypto_core_ristretto255_scalar_invert(delta)
   for path in sys.stdin:
     path = path.strip()
@@ -439,15 +446,53 @@ def update(keyid, delta):
         if keyid!=fkeyid:
             if config.get('verbose'): print(f"{path} is not encrypted using keyid: {args.keyid}, skipping")
             continue
+        fepoch = struct.unpack(">I", fd.read(4))[0]
+        if fepoch+1 != epoch:
+           print("epoch of file {path} should be {epoch-1} is instead {fepoch}. skipping", file=sys.stderr)
+           continue
         w = fd.read(pysodium.crypto_core_ristretto255_BYTES)
         w = pysodium.crypto_scalarmult_ristretto255(delta, w)
         fd.seek(-pysodium.crypto_core_ristretto255_BYTES,io.SEEK_CUR)
+        fd.seek(-4,io.SEEK_CUR)
+        fd.write(struct.pack(">I", epoch))
         fd.write(w)
   return True
 
+def refresh(m, keyid, force=False):
+  n = len(m)
+  # load peer long-term keys
+  sigpk = a2b_base64(config['ltsigpub'][8:])
+
+  for i, peer in enumerate(m):
+    pkid = pysodium.crypto_generichash(str(i).encode('utf8') + keyid)
+    m.send(i, REFRESH+pkid+sigpk)
+
+  lpki, owner_pks, lepoch, t, lpkis = loadkeymeta(keyid)
+
+  auth(m, keyid, [sigpk] * len(m))
+
+  resps = tuple(p for p in m.gather(4+33, proc=lambda x: (x[:4], x[4:])) if p is not None)
+  if len(resps) != n:
+    raise ValueError("only {len(resps)} out of {n} peers responded with their pubkey shares")
+  pkis = [x[1] for x in resps]
+  pki = pyoprf.thresholdmult(pkis[:t])
+
+  epoch = set(struct.unpack(">I", r[0])[0] for r in resps)
+  if len(epoch) != 1: raise ValueError(f"inconsistent epochs received: {tmp}")
+  epoch = tuple(epoch)[0]
+  if epoch < lepoch: raise ValueError(f"locally cached epoch({lepoch}) is greater or equal to rotated epoch({epoch})")
+  if epoch == lepoch:
+     if pki != lpki: raise ValueError(f"epoch matches between KMS and local data, but public key for the current epoch does not")
+     if b''.join(pkis) != lpkis:
+        raise ValueError(f"epoch matches between KMS and local data, but public key shares for the current epoch does not")
+  else:
+     savekey(keyid, owner_pks, pki, pkis, t, epoch)
+
+  return f"KLCPK-{b2a_base64(keyid+resps[0][0]+pki).decode('utf8').strip()}"
+
 def delete(m, keyid, force=False):
   # load peer long-term keys
-  sigpk = a2b_base64(config['ltsigpub'][6:])
+  sigpk = a2b_base64(config['ltsigpub'][8:])
 
   for i, peer in enumerate(m):
     pkid = pysodium.crypto_generichash(str(i).encode('utf8') + keyid)
@@ -474,15 +519,17 @@ def auth(m, keyid, reqbufs, sk = None):
   if len(nonces) != len(m):
     raise ValueError("only {len(nonces)} out of {len(m)} peers responded with auth nonces")
 
+  clearsk = False
   if sk is None:
     sk = getltsigkey()
+    clearsk = True
 
   for i, nonce in enumerate(nonces):
     pkid = pysodium.crypto_generichash(str(i).encode('utf8') + keyid)
     resp = pysodium.crypto_sign_detached(pkid+reqbufs[i]+nonce,sk)
     send_pkt(m, resp, i)
 
-  clearmem(sk)
+  if clearsk: clearmem(sk)
 
 def adminauth(m, keyid, op, pubkey=None, rights=None):
   if op!='list':
@@ -517,11 +564,12 @@ def adminauth(m, keyid, op, pubkey=None, rights=None):
   if len(authblobs) != len(m): raise ValueError("failed to receive auth blob sizes")
   if len(set(authblobs)) != 1: raise ValueError("received inconsistent auth blob sizes")
 
-  pk = a2b_base64(config['ltsigpub'][6:])
+  _, pk, _, _, _ = loadkeymeta(keyid)
   authblob = tuple(set(authblobs))[0]
 
   sig = authblob[:pysodium.crypto_sign_BYTES]
   data = authblob[pysodium.crypto_sign_BYTES:]
+
   try:
     pysodium.crypto_sign_verify_detached(sig, data, pk)
   except:
@@ -560,6 +608,7 @@ def usage(params, help=False):
   print("     %s encrypt <keyid>" % params[0])
   print("     %s decrypt [<ltsigkey]"         % params[0])
   print("     %s rotate  <keyid> [<ltsigkey]" % params[0])
+  print("     %s refresh <keyid> [<ltsigkey]" % params[0])
   print("     %s delete  <keyid> [<ltsigkey]" % params[0])
   print("     %s update  <keyid> <delta>  <files2update" % params[0])
   print("     %s adduser <keyid> <b64 pubkey> <owner,decrypt,update,delete> [<ltsigkey]" % params[0])
@@ -576,7 +625,8 @@ cmds = {'init'     : {'cmd': init,      'net': False, 'params': 2},
         'rotate'   : {'cmd': rotate,    'net': True,  'params': 3},
         'encrypt'  : {'cmd': encrypt,   'net': False, 'params': 3},
         'decrypt'  : {'cmd': decrypt,   'net': True,  'params': 2},
-        'update'   : {'cmd': update,    'net': False, 'params': 4},
+        'update'   : {'cmd': update,    'net': False, 'params': 3},
+        'refresh'  : {'cmd': refresh,   'net': True,  'params': 3},
         'delete'   : {'cmd': delete,    'net': True,  'params': 3},
         'adduser'  : {'cmd': adminauth, 'net': True,  'params': 5},
         'deluser'  : {'cmd': adminauth, 'net': True,  'params': 4},
@@ -615,13 +665,10 @@ def main(params=sys.argv):
     args.append(s)
 
   if cmd not in {decrypt, init}:
-    if cmd == encrypt and params[2].startswith("KLUTSHNIK-"):
+    if cmd == encrypt and params[2].startswith("KLCPK-"):
        args.append(params[2])
     else:
        args.append(pysodium.crypto_generichash(params[2], k=config['id_salt']))
-
-  if cmd == update:
-    args.append(params[3])
 
   if params[1] == "adduser":
     args.append('add')
@@ -649,7 +696,7 @@ def main(params=sys.argv):
     print(error, file=sys.stderr)
     sys.exit(1) # generic errors
 
-  if cmd in {create, rotate}:
+  if cmd in {create, rotate, refresh}:
     print(ret)
     sys.stdout.flush()
   elif ret != True:
