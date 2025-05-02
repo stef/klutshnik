@@ -825,8 +825,6 @@ fn toprf_update(cfg: *const Config, s: *sslStream, req: *const UpdateReq) void {
         warn("failed to start toprf update peer (error code: {})\n", .{retsp});
         fail(s);
     }
-    // todo check if stp_ltpk is in authorized_keys
-    utils.hexdump(&stp_ltpk);
 
     var params: [2]u8 = undefined;
     loadx(cfg, req.id[0..], "params", &params) catch |err| {
