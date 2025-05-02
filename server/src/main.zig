@@ -779,6 +779,11 @@ fn dkg(cfg: *const Config, s: *sslStream, req: *const CreateReq) *const [sodium.
         log("failed to store owner sig pubkey: {}\n", .{err}, req.id[0..]);
         fail(s);
     };
+    const epoch: u32 = 0;
+    store(cfg, req.id[0..], "epoch", mem.asBytes(&epoch), false) catch |err| {
+        log("failed to store epoch: {}\n", .{err}, req.id[0..]);
+        fail(s);
+    };
 
     var pki: [toprf.TOPRF_Share_BYTES]u8 = undefined;
     pki[0]=share[0];
@@ -848,11 +853,16 @@ fn toprf_update(cfg: *const Config, s: *sslStream, req: *const UpdateReq) void {
         fail(s);
     };
     const index: u8 = k0_share[0].index;
-    // todo load commitments, note there might be less than commitments if we are dynamically expanding
+    // load commitments - todo there might be less than commitments if we are dynamically expanding
     const k0_commitments: [][sodium.crypto_core_ristretto255_BYTES]u8  = allocator.alloc([sodium.crypto_core_ristretto255_BYTES]u8, n) catch @panic("oom");
     defer allocator.free(k0_commitments);
     loadx(cfg, req.id[0..], "commitments", mem.sliceAsBytes(k0_commitments)) catch |err| {
         log("failed to load k0 commitments: {}\n", .{err}, req.id[0..]);
+        fail(s);
+    };
+    var epoch: u32 = undefined;
+    loadx(cfg, req.id[0..], "epoch", mem.asBytes(&epoch)) catch |err| {
+        log("failed to load epoch: {}\n", .{err}, req.id[0..]);
         fail(s);
     };
 
@@ -971,6 +981,11 @@ fn toprf_update(cfg: *const Config, s: *sslStream, req: *const UpdateReq) void {
         log("failed to store share: {}\n", .{err}, req.id[0..]);
         fail(s);
     };
+    epoch+=1;
+    store(cfg, req.id[0..], "epoch", mem.asBytes(&epoch), false) catch |err| {
+        log("failed to store epoch: {}\n", .{err}, req.id[0..]);
+        fail(s);
+    };
 
     const commitments = tupdate.toprf_update_peerstate_commitments(@ptrCast(peer))[0..sodium.crypto_scalarmult_ristretto255_BYTES*n];
     store(cfg, req.id[0..], "commitments", commitments, false) catch |err| {
@@ -981,6 +996,13 @@ fn toprf_update(cfg: *const Config, s: *sslStream, req: *const UpdateReq) void {
     var pki: [toprf.TOPRF_Share_BYTES]u8 = undefined;
     pki[0]=share[0];
     if(0!=sodium.crypto_scalarmult_ristretto255_base(pki[1..],share[1..33])) @panic("invalid share generated");
+
+    var epoch_buf: [4]u8 = undefined;
+    std.mem.writeInt(u32, &epoch_buf, epoch, std.builtin.Endian.big);
+    _ = s.write(epoch_buf[0..]) catch |e| {
+        warn("error: {}\n", .{e});
+        @panic("network error");
+    };
     _ = s.write(pki[0..]) catch |e| {
         warn("error: {}\n", .{e});
         @panic("network error");
