@@ -218,7 +218,7 @@ fn check_or_init(path: [:0]const u8, ktype: KeyType) void {
                 KeyType.Noise => {
                     sodium.randombytes_buf(sk.ptr, sodium.crypto_scalarmult_SCALARBYTES);
                     if(0!=sodium.crypto_scalarmult_base( pk.ptr, sk.ptr)) {
-                        warn("failed to generated noise pubkey\n", .{});
+                        warn("failed to generate noise pubkey\n", .{});
                         posix.exit(1);
                     }
                 },
@@ -446,6 +446,33 @@ fn loadcfg() anyerror!Config {
     check_or_init(cfg.ltsigkey, KeyType.LTSig);
     check_or_init(cfg.noisekey, KeyType.Noise);
     if (std.os.argv.len == 2 and std.mem.eql(u8, std.mem.span(std.os.argv[1]), "init")) {
+
+        const ltsigkey: []const u8 = load(&cfg, cfg.ltsigkey, sodium.crypto_sign_SECRETKEYBYTES) catch |err| {
+            warn("failed to load ltsig key: {}\n", .{err});
+            posix.exit(1);
+        };
+        const pks = allocator.alloc(u8, sodium.crypto_sign_PUBLICKEYBYTES+sodium.crypto_scalarmult_BYTES) catch @panic("OOM");
+        defer allocator.free(pks);
+        if(0!=sodium.crypto_sign_ed25519_sk_to_pk(pks[0..sodium.crypto_sign_PUBLICKEYBYTES].ptr, ltsigkey.ptr)) {
+            warn("failed to generate ltsig pubkey\n", .{});
+            posix.exit(1);
+        }
+
+        const noisekey: []const u8 = load(&cfg, cfg.noisekey, sodium.crypto_scalarmult_SCALARBYTES) catch |err| {
+            warn("failed to load noise key: {}\n", .{err});
+            posix.exit(1);
+        };
+
+        if(0!=sodium.crypto_scalarmult_base( pks[sodium.crypto_sign_PUBLICKEYBYTES..].ptr, noisekey.ptr)) {
+            warn("failed to generate noise pubkey\n", .{});
+            posix.exit(1);
+        }
+
+        const b64pk: []u8 = allocator.alloc(u8, std.base64.standard.Encoder.calcSize(pks[0..].len)) catch @panic("OOM");
+        defer allocator.free(b64pk);
+        _ = std.base64.standard.Encoder.encode(b64pk, pks);
+        warn("The following are the base64 encoded long-term and noise public keys that need to be added to all KMS authorized_keys files:\n{s}\n", .{b64pk});
+
         posix.exit(0);
     }
 
