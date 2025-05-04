@@ -1,16 +1,16 @@
 #!/bin/sh -x
 
-ORACLE=${ORACLE:-../../../server/zig-out/bin/server}
+ORACLE=${ORACLE:-../../../server/zig-out/bin/klutshnikd}
 PIDS=""
 
 cleanup() {
- echo killing oracles ${PIDS}
+ echo killing klutshnikds ${PIDS}
  kill ${PIDS}
  exit
 }
 
 function start_server() {
-   printf "starting oracle %s" "$1"
+   printf "starting klutshnikd %s" "$1"
    cd "$1"
    "$ORACLE" >log 2>&1 &
    PIDS="$PIDS $!"
