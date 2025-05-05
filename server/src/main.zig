@@ -83,17 +83,20 @@ const KeyType = enum(u8) {
 };
 
 const CreateReq = extern struct {
+    version: u8 align(1),
     id: [sodium.crypto_generichash_BYTES]u8 align(1),
     msg0: [stp_dkg.stpvssdkg_start_msg_SIZE]u8 align(1),
 };
 
 const UpdateReq = extern struct {
+    version: u8 align(1),
     id: [sodium.crypto_generichash_BYTES]u8 align(1),
     msg0: [tupdate.toprfupdate_stp_start_msg_SIZE]u8 align(1),
     pk: [sodium.crypto_sign_PUBLICKEYBYTES]u8 align(1),
 };
 
 const DecryptReq = extern struct {
+    version: u8 align(1),
     id: [sodium.crypto_generichash_BYTES]u8 align(1),
     alpha: [sodium.crypto_core_ristretto255_BYTES]u8 align(1),
     verifier: [sodium.crypto_core_ristretto255_BYTES]u8 align(1),
@@ -101,16 +104,19 @@ const DecryptReq = extern struct {
 };
 
 const DeleteReq = extern struct {
+    version: u8 align(1),
     id: [sodium.crypto_generichash_BYTES]u8 align(1),
     pk: [sodium.crypto_sign_PUBLICKEYBYTES]u8 align(1),
 };
 
 const RefreshReq = extern struct {
+    version: u8 align(1),
     id: [sodium.crypto_generichash_BYTES]u8 align(1),
     pk: [sodium.crypto_sign_PUBLICKEYBYTES]u8 align(1),
 };
 
 const ModAuthReq = extern struct {
+    version: u8 align(1),
     id: [sodium.crypto_generichash_BYTES]u8 align(1),
     readonly: u8 align(1),
 };
@@ -1080,7 +1086,7 @@ fn read_req(s: *sslStream, comptime T: type, op: []const u8) anyerror!*T {
 }
 
 fn auth(cfg: *const Config, s: *sslStream, op: u8, pk: *ed25519.PublicKey, reqbuf: []const u8) void {
-    const reqid = reqbuf[0..32];
+    const reqid = reqbuf[1..33];
 
     var owner: [sodium.crypto_sign_PUBLICKEYBYTES]u8 = undefined;
     loadx(cfg, reqid, "owner", &owner) catch |err| {
@@ -1118,7 +1124,7 @@ fn auth(cfg: *const Config, s: *sslStream, op: u8, pk: *ed25519.PublicKey, reqbu
         authfd.close();
         const auth_sig = ed25519.Signature.fromBytes(authbuf[0..siglen].*);
         auth_sig.verify(authbuf[siglen..], owner_pk) catch |err| {
-            log("auth fail: {}\n", .{err}, reqbuf[0..sodium.crypto_generichash_BYTES]);
+            log("auth fail: {}\n", .{err}, reqbuf[1..1+sodium.crypto_generichash_BYTES]);
             fail(s);
         };
 
@@ -1134,12 +1140,12 @@ fn auth(cfg: *const Config, s: *sslStream, op: u8, pk: *ed25519.PublicKey, reqbu
                     authorized = true;
                     break;
                 }
-                log("unauthorized {x:0>64}\n", .{std.fmt.fmtSliceHexLower(&pk.toBytes())}, reqbuf[0..sodium.crypto_generichash_BYTES]);
+                log("unauthorized {x:0>64}\n", .{std.fmt.fmtSliceHexLower(&pk.toBytes())}, reqbuf[1..1+sodium.crypto_generichash_BYTES]);
                 fail(s);
             }
         }
         if(!authorized) {
-            log("unauthorized {x:0>64}\n", .{std.fmt.fmtSliceHexLower(&pk.toBytes())}, reqbuf[0..sodium.crypto_generichash_BYTES]);
+            log("unauthorized {x:0>64}\n", .{std.fmt.fmtSliceHexLower(&pk.toBytes())}, reqbuf[1..1+sodium.crypto_generichash_BYTES]);
             fail(s);
         }
     }
@@ -1152,19 +1158,19 @@ fn auth(cfg: *const Config, s: *sslStream, op: u8, pk: *ed25519.PublicKey, reqbu
     const sigbuf = read_pkt(s);
     defer(allocator.free(sigbuf));
     if(sigbuf.len!=ed25519.Signature.encoded_length) {
-        log("auth response signature has invalid size: {}\n", .{sigbuf.len}, reqbuf[0..sodium.crypto_generichash_BYTES]);
+        log("auth response signature has invalid size: {}\n", .{sigbuf.len}, reqbuf[1..1+sodium.crypto_generichash_BYTES]);
         fail(s);
     }
     const sig = ed25519.Signature.fromBytes(sigbuf[0..siglen].*);
     sig.verify(data, pk.*) catch |err| {
-        log("auth fail using pk {x:0>64}: {}\n", .{std.fmt.fmtSliceHexLower(&pk.toBytes()), err}, reqbuf[0..sodium.crypto_generichash_BYTES]);
+        log("auth fail using pk {x:0>64}: {}\n", .{std.fmt.fmtSliceHexLower(&pk.toBytes()), err}, reqbuf[1..1+sodium.crypto_generichash_BYTES]);
         warn("sig: ", .{}); utils.hexdump(sigbuf[0..siglen]);
         warn("data: ", .{}); utils.hexdump(data[0..]);
         warn("pk: ", .{}); utils.hexdump(&pk.toBytes());
         fail(s);
     };
 
-    log("successfully authenticated using pk {x:0>64}\n", .{std.fmt.fmtSliceHexLower(&pk.toBytes())}, reqbuf[0..sodium.crypto_generichash_BYTES]);
+    log("successfully authenticated using pk {x:0>64}\n", .{std.fmt.fmtSliceHexLower(&pk.toBytes())}, reqbuf[1..1+sodium.crypto_generichash_BYTES]);
 }
 
 fn create(cfg: *const Config, s: *sslStream, req: *const CreateReq) void {

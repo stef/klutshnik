@@ -20,6 +20,7 @@ if not klutshniklib._name:
    raise ValueError('Unable to find libklutshnik')
 
 KEYID_SIZE = pysodium.crypto_generichash_BYTES
+VERSION = b'\x00'
 
 #### consts ####
 
@@ -210,7 +211,7 @@ def create(m, keyid):
   stp, msg0 = pyoprf.stp_dkg_start_stp(n, t, ts_epsilon, "klutshnik v1.0 stp dkg", sig_pks, sig_sks)
   for i, peer in enumerate(m):
     pkid = pysodium.crypto_generichash(str(i).encode('utf8') + keyid)
-    m.send(i, op+pkid+msg0)
+    m.send(i, op+VERSION+pkid+msg0)
 
   while pyoprf.stp_dkg_stp_not_done(stp):
     cur_step = pyoprf.stp_dkg_stpstate_step(stp)
@@ -286,7 +287,7 @@ def rotate(m, keyid, force=False):
   stp, msg0 = pyoprf.tupdate_start_stp(n, t, ts_epsilon, "klutshnik update", sig_pks, keyid, sig_sks)
   for i, peer in enumerate(m):
     pkid = pysodium.crypto_generichash(str(i).encode('utf8') + keyid)
-    m.send(i, op+pkid+msg0+sig_pks[0])
+    m.send(i, op+VERSION+pkid+msg0+sig_pks[0])
 
   auth(m, keyid, [msg0+sig_pks[0]] * len(m), sig_sks)
   clearmem(sig_sks)
@@ -389,7 +390,7 @@ def decrypt(m):
   msg = a + v
   for i, peer in enumerate(m):
     pkid = pysodium.crypto_generichash(str(i).encode('utf8') + keyid)
-    m.send(i, DECRYPT+pkid+msg+sigpk)
+    m.send(i, DECRYPT+VERSION+pkid+msg+sigpk)
 
   auth(m, keyid, [msg+sigpk] * len(m), sk)
   clearmem(sk)
@@ -465,7 +466,7 @@ def refresh(m, keyid, force=False):
 
   for i, peer in enumerate(m):
     pkid = pysodium.crypto_generichash(str(i).encode('utf8') + keyid)
-    m.send(i, REFRESH+pkid+sigpk)
+    m.send(i, REFRESH+VERSION+pkid+sigpk)
 
   lpki, owner_pks, lepoch, t, lpkis = loadkeymeta(keyid)
 
@@ -496,7 +497,7 @@ def delete(m, keyid, force=False):
 
   for i, peer in enumerate(m):
     pkid = pysodium.crypto_generichash(str(i).encode('utf8') + keyid)
-    m.send(i, DELETE+pkid+sigpk)
+    m.send(i, DELETE+VERSION+pkid+sigpk)
 
   auth(m, keyid, [sigpk] * len(m))
 
@@ -526,7 +527,7 @@ def auth(m, keyid, reqbufs, sk = None):
 
   for i, nonce in enumerate(nonces):
     pkid = pysodium.crypto_generichash(str(i).encode('utf8') + keyid)
-    resp = pysodium.crypto_sign_detached(pkid+reqbufs[i]+nonce,sk)
+    resp = pysodium.crypto_sign_detached(VERSION+pkid+reqbufs[i]+nonce,sk)
     send_pkt(m, resp, i)
 
   if clearsk: clearmem(sk)
@@ -549,7 +550,7 @@ def adminauth(m, keyid, op, pubkey=None, rights=None):
 
   for i, peer in enumerate(m):
     pkid = pysodium.crypto_generichash(str(i).encode('utf8') + keyid)
-    m.send(i, MODAUTH+pkid+opcode)
+    m.send(i, MODAUTH+VERSION+pkid+opcode)
 
   sig_sks = getltsigkey()
 
