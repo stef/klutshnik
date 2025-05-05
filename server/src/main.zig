@@ -1086,6 +1086,20 @@ fn read_req(s: *sslStream, comptime T: type, op: []const u8) anyerror!*T {
 }
 
 fn auth(cfg: *const Config, s: *sslStream, op: u8, pk: *ed25519.PublicKey, reqbuf: []const u8) void {
+    var nonce : [32]u8 = undefined;
+    std.crypto.random.bytes(&nonce);
+    send_pkt(s, nonce[0..]);
+
+    const data = mem.concat(allocator, u8, &[_][]const u8{ reqbuf, nonce[0..] }) catch @panic("oom");
+    const sigbuf = read_pkt(s);
+    defer(allocator.free(sigbuf));
+    if(sigbuf.len!=ed25519.Signature.encoded_length) {
+        log("auth response signature has invalid size: {}\n", .{sigbuf.len}, reqbuf[1..1+sodium.crypto_generichash_BYTES]);
+        fail(s);
+    }
+    const siglen = ed25519.Signature.encoded_length;
+    const sig = ed25519.Signature.fromBytes(sigbuf[0..siglen].*);
+
     const reqid = reqbuf[1..33];
 
     var owner: [sodium.crypto_sign_PUBLICKEYBYTES]u8 = undefined;
@@ -1098,9 +1112,11 @@ fn auth(cfg: *const Config, s: *sslStream, op: u8, pk: *ed25519.PublicKey, reqbu
         fail(s);
     };
 
-    const siglen = ed25519.Signature.encoded_length;
+    var authorized: bool = false;
+
     if(op==@intFromEnum(KlutshnikPerms.OWNER)) {
         pk.* = owner_pk;
+        authorized = true;
     } else {
         // check if pk has permission
         // auth file load
@@ -1129,7 +1145,6 @@ fn auth(cfg: *const Config, s: *sslStream, op: u8, pk: *ed25519.PublicKey, reqbu
         };
 
         var ptr: usize = siglen;
-        var authorized: bool = false;
         while(ptr < auth_size) {
             const _pk = ptr;
             ptr += sodium.crypto_sign_PUBLICKEYBYTES;
@@ -1141,34 +1156,22 @@ fn auth(cfg: *const Config, s: *sslStream, op: u8, pk: *ed25519.PublicKey, reqbu
                     break;
                 }
                 log("unauthorized {x:0>64}\n", .{std.fmt.fmtSliceHexLower(&pk.toBytes())}, reqbuf[1..1+sodium.crypto_generichash_BYTES]);
-                fail(s);
             }
         }
         if(!authorized) {
             log("unauthorized {x:0>64}\n", .{std.fmt.fmtSliceHexLower(&pk.toBytes())}, reqbuf[1..1+sodium.crypto_generichash_BYTES]);
-            fail(s);
         }
     }
 
-    var nonce : [32]u8 = undefined;
-    std.crypto.random.bytes(&nonce);
-    send_pkt(s, nonce[0..]);
-
-    const data = mem.concat(allocator, u8, &[_][]const u8{ reqbuf, nonce[0..] }) catch @panic("oom");
-    const sigbuf = read_pkt(s);
-    defer(allocator.free(sigbuf));
-    if(sigbuf.len!=ed25519.Signature.encoded_length) {
-        log("auth response signature has invalid size: {}\n", .{sigbuf.len}, reqbuf[1..1+sodium.crypto_generichash_BYTES]);
-        fail(s);
-    }
-    const sig = ed25519.Signature.fromBytes(sigbuf[0..siglen].*);
     sig.verify(data, pk.*) catch |err| {
         log("auth fail using pk {x:0>64}: {}\n", .{std.fmt.fmtSliceHexLower(&pk.toBytes()), err}, reqbuf[1..1+sodium.crypto_generichash_BYTES]);
         warn("sig: ", .{}); utils.hexdump(sigbuf[0..siglen]);
         warn("data: ", .{}); utils.hexdump(data[0..]);
         warn("pk: ", .{}); utils.hexdump(&pk.toBytes());
-        fail(s);
+        authorized = false;
     };
+
+    if(authorized==false) fail(s);
 
     log("successfully authenticated using pk {x:0>64}\n", .{std.fmt.fmtSliceHexLower(&pk.toBytes())}, reqbuf[1..1+sodium.crypto_generichash_BYTES]);
 }
