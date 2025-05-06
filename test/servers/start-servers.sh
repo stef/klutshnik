@@ -10,7 +10,7 @@ cleanup() {
 }
 
 function start_server() {
-   printf "starting klutshnikd %s" "$1"
+   printf "starting klutshnikd %s\n" "$1"
    cd "$1"
    "$ORACLE" >log 2>&1 &
    PIDS="$PIDS $!"
