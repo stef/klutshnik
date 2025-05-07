@@ -289,7 +289,7 @@ def rotate(m, keyid, force=False):
     pkid = pysodium.crypto_generichash(str(i).encode('utf8') + keyid)
     m.send(i, op+VERSION+pkid+msg0+sig_pks[0])
 
-  auth(m, keyid, [msg0+sig_pks[0]] * len(m), sig_sks)
+  auth(m, ROTATE, keyid, [msg0+sig_pks[0]] * len(m), sig_sks)
   clearmem(sig_sks)
 
   while pyoprf.tupdate_stp_not_done(stp):
@@ -392,7 +392,7 @@ def decrypt(m):
     pkid = pysodium.crypto_generichash(str(i).encode('utf8') + keyid)
     m.send(i, DECRYPT+VERSION+pkid+msg+sigpk)
 
-  auth(m, keyid, [msg+sigpk] * len(m), sk)
+  auth(m, DECRYPT, keyid, [msg+sigpk] * len(m), sk)
   clearmem(sk)
 
   # receive responses from tuokms_evaluate
@@ -470,7 +470,7 @@ def refresh(m, keyid, force=False):
 
   lpki, owner_pks, lepoch, t, lpkis = loadkeymeta(keyid)
 
-  auth(m, keyid, [sigpk] * len(m))
+  auth(m, REFRESH, keyid, [sigpk] * len(m))
 
   resps = tuple(p for p in m.gather(4+33, proc=lambda x: (x[:4], x[4:])) if p is not None)
   if len(resps) != n:
@@ -499,7 +499,7 @@ def delete(m, keyid, force=False):
     pkid = pysodium.crypto_generichash(str(i).encode('utf8') + keyid)
     m.send(i, DELETE+VERSION+pkid+sigpk)
 
-  auth(m, keyid, [sigpk] * len(m))
+  auth(m, DELETE, keyid, [sigpk] * len(m))
 
   ret = True
   resps = m.gather(2)
@@ -512,7 +512,7 @@ def delete(m, keyid, force=False):
 
   return ret
 
-def auth(m, keyid, reqbufs, sk = None):
+def auth(m, op, keyid, reqbufs, sk = None):
   sizes = tuple(p for p in m.gather(2) if struct.unpack(">H", p)[0] != 32)
   if sizes != tuple(): raise ValueError("failed to receive auth nonces")
 
@@ -527,7 +527,7 @@ def auth(m, keyid, reqbufs, sk = None):
 
   for i, nonce in enumerate(nonces):
     pkid = pysodium.crypto_generichash(str(i).encode('utf8') + keyid)
-    resp = pysodium.crypto_sign_detached(VERSION+pkid+reqbufs[i]+nonce,sk)
+    resp = pysodium.crypto_sign_detached(op+VERSION+pkid+reqbufs[i]+nonce,sk)
     send_pkt(m, resp, i)
 
   if clearsk: clearmem(sk)
@@ -554,7 +554,7 @@ def adminauth(m, keyid, op, pubkey=None, rights=None):
 
   sig_sks = getltsigkey()
 
-  auth(m, keyid, [opcode] * len(m), sig_sks)
+  auth(m, MODAUTH, keyid, [opcode] * len(m), sig_sks)
 
   sizes = tuple(struct.unpack(">H", p)[0] for p in m.gather(2) if p is not None)
   if len(sizes) != len(m): raise ValueError("failed to receive auth blob sizes")

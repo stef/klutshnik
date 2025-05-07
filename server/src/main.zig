@@ -388,6 +388,7 @@ fn loadcfg() anyerror!Config {
                     cfg.noisekey = if (server.Table.keys.get("noisekey")) |v| expandpath(v.String) else cfg.noisekey;
                     if (server.Table.keys.get("authorized_keys")) |v| {
                         const path = expandpath(v.String);
+                        defer allocator.free(path);
                         cfg.authorized_keys = load_pubkeys(path) catch |err| {
                             warn("failed to load authorized keys from {s}: {}\n", .{path, err});
                             posix.exit(1);
@@ -1085,12 +1086,22 @@ fn read_req(s: *sslStream, comptime T: type, op: []const u8) anyerror!*T {
     return req;
 }
 
-fn auth(cfg: *const Config, s: *sslStream, op: u8, pk: *ed25519.PublicKey, reqbuf: []const u8) void {
+fn auth(cfg: *const Config, s: *sslStream, op: KlutshnikOp, pk: *ed25519.PublicKey, reqbuf: []const u8) void {
     var nonce : [32]u8 = undefined;
     std.crypto.random.bytes(&nonce);
     send_pkt(s, nonce[0..]);
 
-    const data = mem.concat(allocator, u8, &[_][]const u8{ reqbuf, nonce[0..] }) catch @panic("oom");
+    const perm = switch (op) {
+        KlutshnikOp.CREATE => unreachable,
+        KlutshnikOp.DECRYPT =>  @intFromEnum(KlutshnikPerms.DECRYPT),
+        KlutshnikOp.DELETE =>  @intFromEnum(KlutshnikPerms.DELETE),
+        KlutshnikOp.MODAUTH =>  @intFromEnum(KlutshnikPerms.OWNER),
+        KlutshnikOp.UPDATE =>  @intFromEnum(KlutshnikPerms.UPDATE),
+        KlutshnikOp.REFRESH =>  @intFromEnum(KlutshnikPerms.OWNER) + @intFromEnum(KlutshnikPerms.UPDATE) + @intFromEnum(KlutshnikPerms.DECRYPT),
+        _ => unreachable,
+    };
+
+    const data = mem.concat(allocator, u8, &[_][]const u8{ mem.asBytes(&@intFromEnum(op)), reqbuf, nonce[0..] }) catch @panic("oom");
     const sigbuf = read_pkt(s);
     defer(allocator.free(sigbuf));
     if(sigbuf.len!=ed25519.Signature.encoded_length) {
@@ -1114,7 +1125,7 @@ fn auth(cfg: *const Config, s: *sslStream, op: u8, pk: *ed25519.PublicKey, reqbu
 
     var authorized: bool = false;
 
-    if(op==@intFromEnum(KlutshnikPerms.OWNER)) {
+    if(perm==@intFromEnum(KlutshnikPerms.OWNER)) {
         pk.* = owner_pk;
         authorized = true;
     } else {
@@ -1148,10 +1159,10 @@ fn auth(cfg: *const Config, s: *sslStream, op: u8, pk: *ed25519.PublicKey, reqbu
         while(ptr < auth_size) {
             const _pk = ptr;
             ptr += sodium.crypto_sign_PUBLICKEYBYTES;
-            const perm = ptr;
+            const _perm = ptr;
             ptr+=1;
             if(mem.eql(u8, authbuf[_pk.._pk+32],&pk.toBytes())) {
-                if(authbuf[perm] & op != 0) {
+                if(authbuf[_perm] & perm != 0) {
                     authorized = true;
                     break;
                 }
@@ -1215,7 +1226,7 @@ fn update(cfg: *const Config, s: *sslStream, req: *const UpdateReq) void {
         log("invalid pubkey in update request: {}\n", .{err}, req.id[0..]);
         fail(s);
     };
-    auth(cfg, s, @intFromEnum(KlutshnikPerms.UPDATE), &pk, mem.asBytes(req));
+    auth(cfg, s, KlutshnikOp.UPDATE, &pk, mem.asBytes(req));
 
     // we hash the id, with some local secret, so clients have no control over the record ids
     // we abuse the key here, because the salt is expected to be exactly 16B
@@ -1239,7 +1250,7 @@ fn decrypt(cfg: *const Config, s: *sslStream, req: *const DecryptReq) void {
         log("invalid pubkey in decrypt request: {}\n", .{err}, req.id[0..]);
         fail(s);
     };
-    auth(cfg, s, @intFromEnum(KlutshnikPerms.DECRYPT), &pk, mem.asBytes(req));
+    auth(cfg, s, KlutshnikOp.DECRYPT, &pk, mem.asBytes(req));
 
     var k0_share: [2]toprf.TOPRF_Share = undefined;
     loadx(cfg, req.id[0..], "share", mem.sliceAsBytes(&k0_share)) catch |err| {
@@ -1272,7 +1283,7 @@ fn delete(cfg: *const Config, s: *sslStream, req: *const DeleteReq) void {
         log("invalid pubkey in delete request: {}\n", .{err}, req.id[0..]);
         fail(s);
     };
-    auth(cfg, s, @intFromEnum(KlutshnikPerms.DELETE), &pk, mem.asBytes(req));
+    auth(cfg, s, KlutshnikOp.DELETE, &pk, mem.asBytes(req));
 
     var local_id = [_]u8{0} ** blake2b.digest_length;
     blake2b.hash(req.id[0..], &local_id, .{ .key = cfg.record_salt });
@@ -1313,7 +1324,7 @@ fn modauth(cfg: *const Config, s: *sslStream, req: *const ModAuthReq) void {
 
     ////////
     var pk : ed25519.PublicKey = undefined;
-    auth(cfg, s, @intFromEnum(KlutshnikPerms.OWNER), &pk,mem.asBytes(req));
+    auth(cfg, s, KlutshnikOp.MODAUTH, &pk,mem.asBytes(req));
 
     // auth file load
     const authfd = open(cfg, &req.id, "auth") catch |err| {
@@ -1363,8 +1374,7 @@ fn refresh(cfg: *const Config, s: *sslStream, req: *const RefreshReq) void {
         log("invalid pubkey in delete request: {}\n", .{err}, req.id[0..]);
         fail(s);
     };
-    const perm = @intFromEnum(KlutshnikPerms.OWNER) + @intFromEnum(KlutshnikPerms.UPDATE) + @intFromEnum(KlutshnikPerms.DECRYPT);
-    auth(cfg, s, perm, &pk, mem.asBytes(req));
+    auth(cfg, s, KlutshnikOp.REFRESH, &pk, mem.asBytes(req));
 
     var share: [2]toprf.TOPRF_Share = undefined;
     loadx(cfg, req.id[0..], "share", mem.sliceAsBytes(&share)) catch |err| {
