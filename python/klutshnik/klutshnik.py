@@ -209,9 +209,7 @@ def create(m, keyid):
   sig_sks = getltsigkey()
 
   stp, msg0 = pyoprf.stp_dkg_start_stp(n, t, ts_epsilon, "klutshnik v1.0 stp dkg", sig_pks, sig_sks)
-  for i, peer in enumerate(m):
-    pkid = pysodium.crypto_generichash(str(i).encode('utf8') + keyid)
-    m.send(i, op+VERSION+pkid+msg0)
+  m.broadcast(op+VERSION+keyid+msg0)
 
   while pyoprf.stp_dkg_stp_not_done(stp):
     cur_step = pyoprf.stp_dkg_stpstate_step(stp)
@@ -285,11 +283,9 @@ def rotate(m, keyid, force=False):
   sig_sks = getltsigkey()
 
   stp, msg0 = pyoprf.tupdate_start_stp(n, t, ts_epsilon, "klutshnik update", sig_pks, keyid, sig_sks)
-  for i, peer in enumerate(m):
-    pkid = pysodium.crypto_generichash(str(i).encode('utf8') + keyid)
-    m.send(i, op+VERSION+pkid+msg0+sig_pks[0])
+  m.broadcast(op+VERSION+keyid+msg0+sig_pks[0])
 
-  auth(m, ROTATE, keyid, [msg0+sig_pks[0]] * len(m), sig_sks)
+  auth(m, ROTATE, keyid, msg0+sig_pks[0], sig_sks)
   clearmem(sig_sks)
 
   while pyoprf.tupdate_stp_not_done(stp):
@@ -388,11 +384,9 @@ def decrypt(m):
 
   # send to servers
   msg = a + v
-  for i, peer in enumerate(m):
-    pkid = pysodium.crypto_generichash(str(i).encode('utf8') + keyid)
-    m.send(i, DECRYPT+VERSION+pkid+msg+sigpk)
+  m.broadcast(DECRYPT+VERSION+keyid+msg+sigpk)
 
-  auth(m, DECRYPT, keyid, [msg+sigpk] * len(m), sk)
+  auth(m, DECRYPT, keyid, msg+sigpk, sk)
   clearmem(sk)
 
   # receive responses from tuokms_evaluate
@@ -463,14 +457,11 @@ def refresh(m, keyid, force=False):
   n = len(m)
   # load peer long-term keys
   sigpk = a2b_base64(config['ltsigpub'][8:])
-
-  for i, peer in enumerate(m):
-    pkid = pysodium.crypto_generichash(str(i).encode('utf8') + keyid)
-    m.send(i, REFRESH+VERSION+pkid+sigpk)
+  m.broadcast(REFRESH+VERSION+keyid+sigpk)
 
   lpki, owner_pks, lepoch, t, lpkis = loadkeymeta(keyid)
 
-  auth(m, REFRESH, keyid, [sigpk] * len(m))
+  auth(m, REFRESH, keyid, sigpk)
 
   resps = tuple(p for p in m.gather(4+33, proc=lambda x: (x[:4], x[4:])) if p is not None)
   if len(resps) != n:
@@ -495,11 +486,9 @@ def delete(m, keyid, force=False):
   # load peer long-term keys
   sigpk = a2b_base64(config['ltsigpub'][8:])
 
-  for i, peer in enumerate(m):
-    pkid = pysodium.crypto_generichash(str(i).encode('utf8') + keyid)
-    m.send(i, DELETE+VERSION+pkid+sigpk)
+  m.broadcast(DELETE+VERSION+keyid+sigpk)
 
-  auth(m, DELETE, keyid, [sigpk] * len(m))
+  auth(m, DELETE, keyid, sigpk)
 
   ret = True
   resps = m.gather(2)
@@ -512,7 +501,7 @@ def delete(m, keyid, force=False):
 
   return ret
 
-def auth(m, op, keyid, reqbufs, sk = None):
+def auth(m, op, keyid, reqbuf, sk = None):
   sizes = tuple(p for p in m.gather(2) if struct.unpack(">H", p)[0] != 32)
   if sizes != tuple(): raise ValueError("failed to receive auth nonces")
 
@@ -526,8 +515,7 @@ def auth(m, op, keyid, reqbufs, sk = None):
     clearsk = True
 
   for i, nonce in enumerate(nonces):
-    pkid = pysodium.crypto_generichash(str(i).encode('utf8') + keyid)
-    resp = pysodium.crypto_sign_detached(op+VERSION+pkid+reqbufs[i]+nonce,sk)
+    resp = pysodium.crypto_sign_detached(op+VERSION+keyid+reqbuf+nonce,sk)
     send_pkt(m, resp, i)
 
   if clearsk: clearmem(sk)
@@ -548,13 +536,11 @@ def adminauth(m, keyid, op, pubkey=None, rights=None):
 
   opcode = b'\x00' if op != 'list' else b'\x01'
 
-  for i, peer in enumerate(m):
-    pkid = pysodium.crypto_generichash(str(i).encode('utf8') + keyid)
-    m.send(i, MODAUTH+VERSION+pkid+opcode)
+  m.broadcast(MODAUTH+VERSION+keyid+opcode)
 
   sig_sks = getltsigkey()
 
-  auth(m, MODAUTH, keyid, [opcode] * len(m), sig_sks)
+  auth(m, MODAUTH, keyid, opcode, sig_sks)
 
   sizes = tuple(struct.unpack(">H", p)[0] for p in m.gather(2) if p is not None)
   if len(sizes) != len(m): raise ValueError("failed to receive auth blob sizes")
