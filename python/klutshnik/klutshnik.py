@@ -587,17 +587,18 @@ def adminauth(m, keyid, op, pubkey=None, rights=None):
   return True
 
 def usage(params, help=False):
+  name = os.path.basename(params[0])
   print("usage:")
-  print("     %s create  <keyid> [<ltsigkey]" % params[0])
-  print("     %s encrypt <keyid>" % params[0])
-  print("     %s decrypt [<ltsigkey]"         % params[0])
-  print("     %s rotate  <keyid> [<ltsigkey]" % params[0])
-  print("     %s refresh <keyid> [<ltsigkey]" % params[0])
-  print("     %s delete  <keyid> [<ltsigkey]" % params[0])
-  print("     %s update  <keyid> <delta>  <files2update" % params[0])
-  print("     %s adduser <keyid> <b64 pubkey> <owner,decrypt,update,delete> [<ltsigkey]" % params[0])
-  print("     %s deluser <keyid> <b64 pubkey> [<ltsigkey]" % params[0])
-  print("     %s listusers <keyid> [<ltsigkey]" % params[0])
+  print("     %s create  <keyid> [<ltsigkey] >pubkey" % name)
+  print("     %s encrypt <pubkey> <plaintext >ciphertext" % name)
+  print("     %s decrypt [<ltsigkey] <ciphertext >plaintext" % name)
+  print("     %s rotate  <keyid> [<ltsigkey] >newpk-and-delta" % name)
+  print("     %s refresh <keyid> [<ltsigkey]" % name)
+  print("     %s delete  <keyid> [<ltsigkey]" % name)
+  print("     %s update  <keyid> <delta <files2update" % name)
+  print("     %s adduser <keyid> <b64 pubkey> <owner,decrypt,update,delete> [<ltsigkey]" % name)
+  print("     %s deluser <keyid> <b64 pubkey> [<ltsigkey]" % name)
+  print("     %s listusers <keyid> [<ltsigkey]" % name)
 
   if help: sys.exit(0)
   sys.exit(100)
