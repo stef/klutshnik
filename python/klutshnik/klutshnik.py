@@ -105,13 +105,11 @@ def send_pkt(s, msg, i=None):
   else:
     s.send(i, plen+msg)
 
-def savekey(keyid, owner_pks, pubkey, pkis, threshold, epoch):
+def savekey(keyid, pubkey, pkis, threshold, epoch):
   keyid = keyid.hex()
   with open(f"{config['keystore']}/{keyid}", 'wb') as fd:
     fd.write(bytes([threshold, len(pkis)]))
     fd.write(struct.pack('>I', epoch))
-    # save also owners ltsig pk
-    fd.write(owner_pks)
     fd.write(pubkey)
     fd.write(b''.join(pkis))
     fd.flush()
@@ -135,10 +133,9 @@ def loadkeymeta(keyid):
       n = int(fd.read(1)[0])
       epoch = struct.unpack('>I', fd.read(4))[0]
       # load also owners ltsig pk
-      owner_pks = fd.read(pysodium.crypto_sign_PUBLICKEYBYTES)
       pki = fd.read(pysodium.crypto_core_ristretto255_BYTES)
       pkis = readall(fd, (pysodium.crypto_core_ristretto255_BYTES+1) * n)
-      return pki, owner_pks, epoch, threshold, pkis
+      return pki, epoch, threshold, pkis
   except FileNotFoundError:
     raise ValueError("unknown keyid")
 
@@ -255,7 +252,7 @@ def create(m, keyid):
   if len(pkis) != n:
     raise ValueError("only {len(pkis)} out of {n} peers responded with their pubkey shares")
   pki = pyoprf.thresholdmult(pkis[:t])
-  savekey(keyid, sig_pks[0], pki, pkis, t, 0)
+  savekey(keyid, pki, pkis, t, 0)
 
   auth0 = sig_pks[0] + b'\x4f'
   sig = pysodium.crypto_sign_detached(auth0,sig_sks)
@@ -267,7 +264,7 @@ def create(m, keyid):
 def rotate(m, keyid, force=False):
   op = ROTATE
   n = len(m)
-  _, owner_pks, lepoch, t, _ = loadkeymeta(keyid)
+  _, lepoch, t, _ = loadkeymeta(keyid)
   ts_epsilon=config['ts_epsilon']
 
   # load peer long-term keys
@@ -343,7 +340,7 @@ def rotate(m, keyid, force=False):
   epoch = tuple(epoch)[0]
   if epoch <= lepoch: raise ValueError(f"locally cached epoch({lepoch}) is greater or equal to rotated epoch({epoch})")
 
-  savekey(keyid, owner_pks, pki, pkis, t, epoch)
+  savekey(keyid, pki, pkis, t, epoch)
 
   return f"KLCPK-{b2a_base64(keyid+resps[0][0]+pki).decode('utf8').strip()}\nKLCDELTA-{b2a_base64(resps[0][0]+delta).decode('utf8').strip()}"
 
@@ -364,7 +361,7 @@ def decrypt(m):
 
   keyid = os.read(0, KEYID_SIZE)
   fepoch = struct.unpack(">I", os.read(0, 4))[0]
-  pubkey, _, epoch, t, pkis = loadkeymeta(keyid)
+  pubkey, epoch, t, pkis = loadkeymeta(keyid)
   if fepoch!=epoch:
      if (fepoch > epoch):
         raise ValueError(f"data is encrypted with a key from the future: {fepoch}, while we have {epoch}, try again after refreshing the local keymaterial.")
@@ -459,7 +456,7 @@ def refresh(m, keyid, force=False):
   sigpk = a2b_base64(config['ltsigpub'][8:])
   m.broadcast(REFRESH+VERSION+keyid+sigpk)
 
-  lpki, owner_pks, lepoch, t, lpkis = loadkeymeta(keyid)
+  lpki, lepoch, t, lpkis = loadkeymeta(keyid)
 
   auth(m, REFRESH, keyid, sigpk)
 
@@ -478,7 +475,7 @@ def refresh(m, keyid, force=False):
      if b''.join(pkis) != lpkis:
         raise ValueError(f"epoch matches between KMS and local data, but public key shares for the current epoch does not")
   else:
-     savekey(keyid, owner_pks, pki, pkis, t, epoch)
+     savekey(keyid, pki, pkis, t, epoch)
 
   return f"KLCPK-{b2a_base64(keyid+resps[0][0]+pki).decode('utf8').strip()}"
 
@@ -551,9 +548,9 @@ def adminauth(m, keyid, op, pubkey=None, rights=None):
   if len(authblobs) != len(m): raise ValueError("failed to receive auth blob sizes")
   if len(set(authblobs)) != 1: raise ValueError("received inconsistent auth blob sizes")
 
-  _, pk, _, _, _ = loadkeymeta(keyid)
   authblob = tuple(set(authblobs))[0]
 
+  pk = a2b_base64(config['ltsigpub'][8:])
   sig = authblob[:pysodium.crypto_sign_BYTES]
   data = authblob[pysodium.crypto_sign_BYTES:]
 
