@@ -18,7 +18,7 @@ delta="${out#* }"
 echo "pk1    $pk"
 echo "delta1 $delta"
 echo update keyid1 encrypted file with delta
-printf "%s\n/tmp/klutshniked" "$delta" | klutshnik update keyid1
+printf "%s\n/tmp/klutshniked" "$delta" | klutshnik update
 
 echo decrypt updated file
 cat kltsk /tmp/klutshniked | klutshnik decrypt
@@ -27,26 +27,34 @@ echo list users
 klutshnik listusers "keyid1" <kltsk
 
 echo add user
-klutshnik adduser keyid1 13lty/jQszJ1Xn5krTC2kltvPJDMqb4bqk3jgZxR430= update <kltsk
+xprt=$(klutshnik adduser keyid1 13lty/jQszJ1Xn5krTC2kltvPJDMqb4bqk3jgZxR430= update,decrypt <kltsk)
 
 echo list users again
 klutshnik listusers "keyid1" <kltsk
 
 cd otherclient/
-cp ../keystore/* keystore/
-echo decrypt updated file with newly added unauthorized user
-klutshnik decrypt </tmp/klutshniked || true
+echo importing key to newly added user
+klutshnik import "importedkey" "$xprt"
+
+echo decrypt updated file with newly added user
+klutshnik decrypt </tmp/klutshniked
 
 echo rotate keyid1 with newly added user
-out=$(klutshnik rotate "keyid1" | tr '\n' " ")
+out=$(klutshnik rotate "importedkey" | tr '\n' " ")
 pk="${out%% *}"
 delta="${out#* }"
 echo "pk1    $pk"
 echo "delta1 $delta"
-cd ..
 
 echo update keyid1 encrypted file with delta from newly added user
-printf "%s\n/tmp/klutshniked" "$delta" | klutshnik update keyid1
+printf "%s\n/tmp/klutshniked" "$delta" | klutshnik update
+
+echo decrypt again updated file with newly added user
+klutshnik decrypt </tmp/klutshniked
+
+echo delete key by unauthorized newsly added user
+klutshnik delete importedkey || true
+cd ..
 
 echo decrypt updated file
 cat kltsk /tmp/klutshniked | klutshnik decrypt || true
