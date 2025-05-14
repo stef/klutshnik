@@ -18,7 +18,7 @@ klutshnik - command-line client for an updatable threshold KMS system
 
      klutshnik delete  <keyname> [<ltsigkey]
 
-     klutshnik update  <keyname> <delta  <files2update
+     klutshnik update  <delta  <files2update
 
      klutshnik adduser <keyname> <b64 pubkey> <owner,decrypt,update,delete> [<ltsigkey]
 
@@ -177,7 +177,7 @@ properties of this protocol for the current and the previous key.
 
 Files encrypted with the key referenced by the key name can be
 bulk-updated by piping:
- - the update delta tokenfrom the rotate operation described in the
+ - the update delta token from the rotate operation described in the
    previous section, and
  - the list of paths pointing at these files
 into the CLI client.
@@ -187,7 +187,7 @@ this is an offline operation, there is no need for connectivity to the
 KMS', In fact this operation can run on the storage server itself.
 
 ```sh
-% klutshnik update <keyname> <delta  <files2update
+% klutshnik update <delta  <files2update
 ```
 
 Warning: Make sure that you keep the update token delta secret, if it
