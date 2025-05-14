@@ -2,7 +2,7 @@
 # SPDX-FileCopyrightText: 2023, Marsiske Stefan
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-import os, tomllib
+import os, tomlkit
 
 def split_by_n(obj, n):
   # src https://stackoverflow.com/questions/9475241/split-string-every-nth-character
@@ -18,11 +18,11 @@ def getcfg(name, cwd="."):
       # over-ride with local directory config
       os.path.expanduser('/'.join([cwd,f"{name}.cfg"]))
   ]
-  config = dict()
+  config = tomlkit.toml_document.TOMLDocument()
   for path in paths:
     try:
         with open(path, "rb") as f:
-            data = tomllib.load(f)
+            data = tomlkit.load(f)
     except FileNotFoundError:
         continue
     config.update(data)
