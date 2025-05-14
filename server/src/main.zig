@@ -1093,11 +1093,11 @@ fn auth(cfg: *const Config, s: *sslStream, op: KlutshnikOp, pk: *ed25519.PublicK
 
     const perm = switch (op) {
         KlutshnikOp.CREATE => unreachable,
-        KlutshnikOp.DECRYPT =>  @intFromEnum(KlutshnikPerms.DECRYPT),
+        KlutshnikOp.DECRYPT => @intFromEnum(KlutshnikPerms.DECRYPT),
         KlutshnikOp.DELETE =>  @intFromEnum(KlutshnikPerms.DELETE),
-        KlutshnikOp.MODAUTH =>  @intFromEnum(KlutshnikPerms.OWNER),
+        KlutshnikOp.MODAUTH => @intFromEnum(KlutshnikPerms.OWNER),
         KlutshnikOp.UPDATE =>  @intFromEnum(KlutshnikPerms.UPDATE),
-        KlutshnikOp.REFRESH =>  @intFromEnum(KlutshnikPerms.OWNER) + @intFromEnum(KlutshnikPerms.UPDATE) + @intFromEnum(KlutshnikPerms.DECRYPT),
+        KlutshnikOp.REFRESH => @intFromEnum(KlutshnikPerms.OWNER) + @intFromEnum(KlutshnikPerms.UPDATE) + @intFromEnum(KlutshnikPerms.DECRYPT),
         _ => unreachable,
     };
 
@@ -1125,7 +1125,7 @@ fn auth(cfg: *const Config, s: *sslStream, op: KlutshnikOp, pk: *ed25519.PublicK
 
     var authorized: bool = false;
 
-    if(perm==@intFromEnum(KlutshnikPerms.OWNER)) {
+    if(op==KlutshnikOp.MODAUTH) {
         pk.* = owner_pk;
         authorized = true;
     } else {
