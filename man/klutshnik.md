@@ -93,7 +93,7 @@ that people can guess your record ids.
 % klutshnik init
 ```
 
-This checks if the `ltsigkey` variable is pointing at a non-existing
+This checks if the `ltsigkey_path` variable is pointing at a non-existing
 file. If this is the case, then the client generates a new long-term
 signing-key, saves it at the pointed location and prints the public
 key on standard output. This public key value must be manually added
@@ -111,7 +111,7 @@ manager, like `pwdsphinx(1)`, see `klutshnik.cfg(5)` for more details.
 ### Create a new key
 
 Creating a new key is as simple as providing a key name and if
-`ltsigkey` is not configured the long-term signing private key on the
+`ltsigkey_path` is not configured the long-term signing private key on the
 standard input.
 
 ```sh
@@ -269,7 +269,7 @@ the whole scheme.
 
 It is **RECOMMENDED** to store your private long-term signing key in a
 dedicated secure storage instead of just having it in a file on your
-disk pointed at the `ltsigkey` variable in your configuration
+disk pointed at the `ltsigkey_path` variable in your configuration
 file. pwdsphinx provides native support for this.
 
 Do not let any 3rd-party hold enough shares to achieve the threshold.

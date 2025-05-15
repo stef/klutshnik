@@ -188,6 +188,8 @@ def getltsigkey():
         with open(config['ltsigkey_path'],'rb') as fd:
           sk = fd.read()
       else:
+         if config.get('verbose') == True:
+            print("reading lt sigkey from stdin", file=sys.stderr)
          prefix = os.read(0, 6)
          if not prefix == b"kltsk-": raise ValueError(f"invalid long-term sig key on stdin: {repr(prefix)}")
          sk = a2b_base64(os.read(0, 88))
@@ -242,6 +244,7 @@ def init():
          f"Your public key is:\n",
          end="\n\t",
          file=sys.stderr)
+   # todo since we use tomlkit we can actually write this value back.
    print(f"LTSIGPK-{b2a_base64(pk).decode('utf8').strip()}", flush=True)
    print(f"\nplease add it to your configuration 'ltsigpub' variable\n"
          f"and ask the admins of the KMS servers you have configured\n"

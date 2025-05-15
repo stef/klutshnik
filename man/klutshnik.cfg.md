@@ -47,7 +47,7 @@ considered fresh. anything older than this is considered invalid and
 aborts a DKG. Higher values help with laggy links, lower values can
 be fine if you have high-speed connections to all servers. Default: 1200s
 
-### LTSIGKEY
+### LTSIGKEY_PATH
 
 This variable is a path pointing at a file containing a private
 long-term signing key of the client. If this value is not set, it is
