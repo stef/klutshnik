@@ -26,6 +26,8 @@ klutshnik - command-line client for an updatable threshold KMS system
 
      klutshnik listusers <keyname> [<ltsigkey]
 
+     klutshnik import <keyid> <KLTCFG-...> [<ltsigkey]
+
 # DESCRIPTION
 
 klutshnik is a CLI client for an updatable threshold Key Managment
