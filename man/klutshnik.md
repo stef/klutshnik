@@ -241,6 +241,12 @@ signing-key, which has the `owner` permission.
 % klutshnik adduser <keyname> <b64 pubkey> <owner,decrypt,update,delete> [<ltsigkey]
 ```
 
+The output of this operation is the base64 encoded serialized setup
+related to this key. This data is they keyid, and the `[server]`
+section with `ltsigkey` and `ssl_cert` files inlined. This "token"
+must be passed to the user who has been authorized, so they can
+`import` this into their own configuration.
+
 ### Delete a user
 
 A user which has the `owner` permission associated with their
@@ -260,6 +266,23 @@ long-term signing key associated with a key referenced by the
 ```sh
 % klutshnik listusers <keyname> [<ltsigkey]
 ```
+
+### Import Foreign Key Setup
+
+Non-owner users who have been authorized - unless they have the same
+`id_salt` value and the same `[server]` section in their config as the
+owner -, must import the setup of the owner into their local
+`keystore`. The setup is exported by the owner automatically when
+running an `adduser` operation, this output must be passed to the user
+being authorized as follows:
+
+```sh
+% klutshnik import <keyid> <KLTCFG-...b64...> [<ltsigkey]
+```
+
+This command automatically runs internally a `refresh` operation to
+query the current epoch and public key related to this key. All this
+is stored in the local `keystore` of the user.
 
 # SECURITY CONSIDERATIONS
 
