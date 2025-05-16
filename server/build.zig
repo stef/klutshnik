@@ -50,7 +50,7 @@ pub fn build(b: *std.Build) void {
         .root_source_file = b.path("src/main.zig"),
         .target = target,
         .optimize = optimize,
-        //.linkage = .static,
+        .linkage = .static,
     });
 
     exe.pie = pie;
@@ -62,16 +62,17 @@ pub fn build(b: *std.Build) void {
     //exe.linkSystemLibrary2("oprf-noiseXK", .{ .preferred_link_mode = .static });
     //exe.linkSystemLibrary2("oprf", .{ .preferred_link_mode = .static });
     //exe.linkSystemLibrary2("sodium", .{ .preferred_link_mode = .static });
-    exe.linkSystemLibrary("oprf");
-    exe.linkSystemLibrary("sodium");
-    //exe.addObjectFile(.{ .cwd_relative = ("/usr/lib/libsodium.a") });
-    //exe.addObjectFile(.{ .cwd_relative = ("/usr/lib/liboprf.a") });
-    //exe.addObjectFile(.{ .cwd_relative = ("/usr/lib/liboprf-noiseXK.a") });
+    //exe.linkSystemLibrary("oprf");
+    //exe.linkSystemLibrary("sodium");
+    exe.addObjectFile(.{ .cwd_relative = ("/usr/lib/libsodium.a") });
+    exe.addObjectFile(.{ .cwd_relative = ("/usr/lib/liboprf.a") });
+    exe.addObjectFile(.{ .cwd_relative = ("/usr/lib/liboprf-noiseXK.a") });
     exe.addSystemIncludePath(.{ .cwd_relative = "/usr/include/oprf/noiseXK/" });
     exe.addSystemIncludePath(.{ .cwd_relative = "/usr/include/oprf/noiseXK/karmel" });
     exe.addSystemIncludePath(.{ .cwd_relative = "/usr/include/oprf/noiseXK/karmel/minimal" });
     exe.addIncludePath(b.path("."));
     exe.addCSourceFile(.{ .file = b.path("src/workaround.c"), .flags = &[_][]const u8{"-Wall"} });
+    exe.addCSourceFile(.{ .file = b.path("cc-runtime/cc-runtime.c"), .flags = &[_][]const u8{"-Wall"} });
     //exe.linkLibC();
 
     // This declares intent for the executable to be installed into the

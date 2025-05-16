@@ -1,0 +1,3 @@
+[submodule "server/cc-runtime"]
+	path = server/cc-runtime
+	url = https://codeberg.org/osdev/cc-runtime
