@@ -628,6 +628,7 @@ def listusers(m, keyid, ltsigpub, ltsigkey):
   return True
 
 def import_cfg(keyid, ltsigpub, ltsigkey, export):
+   # todo also support importing KLTPK- pubkeys for encryption only, or urls pointing at them
    if not export.startswith("KLTCFG-"): raise ValueError("data to be imported does not have expected prefix")
    data = json.loads(lzma.decompress(a2b_base64(export[7:])))
    if data['n']!=len(data['servers']): raise ValueError("specified n parameter inconsistent with number of specified servers")
