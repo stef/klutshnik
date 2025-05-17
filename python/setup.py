@@ -14,7 +14,7 @@ def read(fname):
     return open(os.path.join(os.path.dirname(__file__), fname)).read()
 
 setup(name = 'klutshnik',
-      version = '0.1.0',
+      version = '0.2.0',
       description = 'Klutshnik CLI client',
       license = "GPLv3",
       author = 'Stefan Marsiske',
