@@ -120,7 +120,7 @@ this):
 # switch to a different terminal and go to klutshnik/test
 # create the key
 % klutshnik create "keyid1"
-pk KLCPK-XhIO9gsXc0EJGlFFgLxlpsVE39pk3gRgzKkPg4gbgg0AAAAA9MxKACsmwEEfbMdS4tf8KrYM5h/w2FRcAZ0/4pRK0GQ=
+KLCPK-XhIO9gsXc0EJGlFFgLxlpsVE39pk3gRgzKkPg4gbgg0AAAAA9MxKACsmwEEfbMdS4tf8KrYM5h/w2FRcAZ0/4pRK0GQ=
 
 # encrypt a message (this one only needs the public key from above)
 % echo "attack at dawn" | klutshnik encrypt KLCPK-XhIO9gsXc0EJGlFFgLxlpsVE39pk3gRgzKkPg4gbgg0AAAAA9MxKACsmwEEfbMdS4tf8KrYM5h/w2FRcAZ0/4pRK0GQ= >/tmp/klutshniked
@@ -130,11 +130,12 @@ pk KLCPK-XhIO9gsXc0EJGlFFgLxlpsVE39pk3gRgzKkPg4gbgg0AAAAA9MxKACsmwEEfbMdS4tf8KrY
 
 # update the key on the klutshnik server
 % klutshnik rotate "keyid1"
-pk1    KLCPK-XhIO9gsXc0EJGlFFgLxlpsVE39pk3gRgzKkPg4gbgg0AAAAB7KMNnGXReMWMnr5kLr20G0e9MYK2ebAUOSCu/9mI+nA=
-delta1 KLCDELTA-AAAAAeSBQc0qA65MBFm/mL9JViLohaTww6d15DAkqce6GhEE
+KLCPK-XhIO9gsXc0EJGlFFgLxlpsVE39pk3gRgzKkPg4gbgg0AAAABkD+jW5DoYBln2WJQ74gySEWhtM4bxbyJkeDgTcpNLVA=
+KLCDELTA-XhIO9gsXc0EJGlFFgLxlpsVE39pk3gRgzKkPg4gbgg0AAAABk4hPN4VKb6lxeZO0hXEx1e/iGWQvYAIXQvu2pbIrQQQ=
 
 # update the encryption on the encrypted file
-% printf "KLCDELTA-AAAAAeSBQc0qA65MBFm/mL9JViLohaTww6d15DAkqce6GhEE\n/tmp/klutshniked" | klutshnik update keyid1
+% { echo "KLCDELTA-XhIO9gsXc0EJGlFFgLxlpsVE39pk3gRgzKkPg4gbgg0AAAABk4hPN4VKb6lxeZO0hXEx1e/iGWQvYAIXQvu2pbIrQQQ="; \
+    echo "/tmp/klutshniked" } | klutshnik update
 
 # decrypt with the new key
 % klutshnik decrypt </tmp/klutshniked
@@ -144,6 +145,8 @@ delta1 KLCDELTA-AAAAAeSBQc0qA65MBFm/mL9JViLohaTww6d15DAkqce6GhEE
 
 # add a user that can update keys, but nothing else
 % klutshnik adduser keyid1 13lty/jQszJ1Xn5krTC2kltvPJDMqb4bqk3jgZxR430= update
+the newly authorized client must run:
+klutshnik import "some-keyname" KLTCFG-<long base64 string>
 
 # check that this user has been added
 % klutshnik listusers "keyid1"
@@ -181,9 +184,9 @@ KLCPK-XhIO9gsXc0EJGlFFgLxlpsVE39pk3gRgzKkPg4gbgg0AAAAAUjWZfmo4B3a3i+Ii+KMS7L5d/v
 % klutshnik decrypt </tmp/encrypted
 HELLO world
 % klutshnik rotate "keyid1"
-KLCPK-XhIO9gsXc0EJGlFFgLxlpsVE39pk3gRgzKkPg4gbgg0AAAABMsUuLaJoCYJKJ6nLFrQ5UUmzncztR1uxsgNtHLd+/i0=
-KLCDELTA-AAAAAUBDx20zWYpSAQVZy/QRkOxzrV0u2GZ6wtV3+a361egJ
-% printf "KLCDELTA-AAAAAUBDx20zWYpSAQVZy/QRkOxzrV0u2GZ6wtV3+a361egJ\n/tmp/encrypted" | klutshnik update keyid1
+KLCPK-XhIO9gsXc0EJGlFFgLxlpsVE39pk3gRgzKkPg4gbgg0AAAABkD+jW5DoYBln2WJQ74gySEWhtM4bxbyJkeDgTcpNLVA=
+KLCDELTA-XhIO9gsXc0EJGlFFgLxlpsVE39pk3gRgzKkPg4gbgg0AAAABk4hPN4VKb6lxeZO0hXEx1e/iGWQvYAIXQvu2pbIrQQQ=
+% printf "KLCDELTA-XhIO9gsXc0EJGlFFgLxlpsVE39pk3gRgzKkPg4gbgg0AAAABk4hPN4VKb6lxeZO0hXEx1e/iGWQvYAIXQvu2pbIrQQQ=\n/tmp/encrypted" | klutshnik update keyid1
 % xxd /tmp/encrypted
 00000000: 5e12 0ef6 0b17 7341 091a 5145 80bc 65a6  ^.....sA..QE..e.
 00000010: c544 dfda 64de 0460 cca9 0f83 881b 820d  .D..d..`........
