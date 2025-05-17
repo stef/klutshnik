@@ -73,8 +73,11 @@ The KMS protects the shares of the key by means of minimized attack
 surface, compartmentalization, strict access controls and auditable
 event logs.
 
-The Storage server discards delta update tokens as soon as the update
-is done.
+Storage server is untrusted. With the following exceptions:
+ - we trust the StS not to DoS the user, by corrupting, deleting, or otherwise
+   denying access to the correctly encrypted data.
+ - we trust the StS to keep the delta update tokens for a key rotation private
+   and after updating the files, to delete this diligently.
 
 The client protects their long-term signing key diligently.
 
