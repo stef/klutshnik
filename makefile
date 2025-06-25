@@ -44,7 +44,7 @@ asan: CFLAGS=-fsanitize=address -static-libasan -g -march=native -Wall -O2 \
 asan: LDFLAGS+= -fsanitize=address -static-libasan
 asan: all
 
-SOURCES=streamcrypt.c tuokms.c
+SOURCES=streamcrypt.c tuokms.c utils.c
 OBJECTS=$(patsubst %.c,%.o,$(SOURCES))
 
 libklutshnik.$(SOEXT): $(SOURCES)
