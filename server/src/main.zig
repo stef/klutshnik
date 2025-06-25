@@ -787,6 +787,10 @@ fn dkg(cfg: *const Config, s: *sslStream, req: *const CreateReq) *const [sodium.
         utils.hexdump(share[0..]);
     }
 
+    var pki: [toprf.TOPRF_Share_BYTES]u8 = undefined;
+    pki[0]=share[0];
+    if(0!=sodium.crypto_scalarmult_ristretto255_base(pki[1..],share[1..33])) @panic("generated invalid share");
+
     store(cfg, req.id[0..], "share", &share, true) catch |err| {
         log("failed to store share: {}\n", .{err}, req.id[0..]);
         fail(s);
@@ -818,9 +822,6 @@ fn dkg(cfg: *const Config, s: *sslStream, req: *const CreateReq) *const [sodium.
         fail(s);
     };
 
-    var pki: [toprf.TOPRF_Share_BYTES]u8 = undefined;
-    pki[0]=share[0];
-    if(0!=sodium.crypto_scalarmult_ristretto255_base(pki[1..],share[1..33])) @panic("invalid share generated");
     _ = s.write(pki[0..]) catch |e| {
         warn("error: {}\n", .{e});
         @panic("network error");
@@ -852,6 +853,13 @@ fn toprf_update(cfg: *const Config, s: *sslStream, req: *const UpdateReq) void {
         warn("failed to start toprf update peer (error code: {})\n", .{retsp});
         fail(s);
     }
+
+    // verify that stp_ltpk == req.pk! abort if not
+    if(!mem.eql(u8, stp_ltpk[0..],req.pk[0..])) {
+        log("stp_ltpk != authorized pk\n", .{}, req.id[0..]);
+        fail(s);
+    }
+    // todo assert that pkid == req.id
 
     var params: [2]u8 = undefined;
     loadx(cfg, req.id[0..], "params", &params) catch |err| {
