@@ -23,15 +23,33 @@ pub fn SecretAllocator() type {
                 .vtable = &.{
                     .alloc = alloc,
                     .resize = resize,
+                    .remap = remap,
                     .free = free,
                 },
             };
         }
 
+        fn remap(ctx: *anyopaque,
+                 buf: []u8,
+                 log2_buf_align: std.mem.Alignment,
+                 new_len: usize,
+                 ra: usize) ?[*]u8 {
+            const self: *Self = @ptrCast(@alignCast(ctx));
+            _=sodium.sodium_munlock(@ptrCast(buf),buf.len);
+            const result = self.parent_allocator.rawRemap(buf, log2_buf_align, new_len, ra);
+            if(result) |new_buf| {
+                if(new_len>0 and 0!=sodium.sodium_mlock(@ptrCast(new_buf), new_len)) {
+                    self.parent_allocator.rawFree(new_buf[0..new_len], log2_buf_align, ra);
+                    return null;
+                }
+            }
+            return result;
+        }
+
         fn alloc(
             ctx: *anyopaque,
             len: usize,
-            log2_ptr_align: u8,
+            log2_ptr_align: std.mem.Alignment,
             ra: usize,
         ) ?[*]u8 {
             const self: *Self = @ptrCast(@alignCast(ctx));
@@ -48,7 +66,7 @@ pub fn SecretAllocator() type {
         fn resize(
             ctx: *anyopaque,
             buf: []u8,
-            log2_buf_align: u8,
+            log2_buf_align: std.mem.Alignment,
             new_len: usize,
             ra: usize,
         ) bool {
@@ -65,7 +83,7 @@ pub fn SecretAllocator() type {
         fn free(
             ctx: *anyopaque,
             buf: []u8,
-            log2_buf_align: u8,
+            log2_buf_align: std.mem.Alignment,
             ra: usize,
         ) void {
             const self: *Self = @ptrCast(@alignCast(ctx));

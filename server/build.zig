@@ -19,13 +19,13 @@ pub fn build(b: *std.Build) void {
     const relro = b.option(bool, "relro", "Force all relocations to be read-only after processing") orelse true;
 
     // load the "zig-toml" dependency from build.zig.zon
-    const toml_package = b.dependency("zig-toml", .{
+    const toml_package = b.dependency("zig_toml", .{
         .target = target,
         .optimize = optimize,
     });
     const toml_module = toml_package.module("toml");
 
-    const bearssl_package = b.dependency("zig-bearssl", .{
+    const bearssl_package = b.dependency("zig_bearssl", .{
         .target = target,
         .optimize = optimize,
     });

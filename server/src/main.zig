@@ -171,10 +171,7 @@ fn setSigHandler() void {
         .mask = std.posix.empty_sigset,
         .flags = std.posix.SA.RESTART,
     };
-    std.posix.sigaction(std.posix.SIG.PIPE, &sa, null) catch |err| {
-        log("failed to install sighandler: {}\n", .{err}, "");
-        posix.exit(99);
-    };
+    std.posix.sigaction(std.posix.SIG.PIPE, &sa, null);
 }
 
 fn expandpath(path: []const u8) [:0]u8 {
@@ -334,8 +331,6 @@ fn ssl_file_missing(path: []const u8) noreturn {
 }
 
 fn loadcfg() anyerror!Config {
-    @setCold(true);
-
     const home = posix.getenv("HOME") orelse "/nonexistant";
     const cfg1 = mem.concat(allocator, u8, &[_][]const u8{ home, "/.config/klutshnik/config" }) catch unreachable;
     defer allocator.free(cfg1);
@@ -489,7 +484,6 @@ fn loadcfg() anyerror!Config {
 /// whenever anything fails during the execution of the protocol the server sends
 /// "\x00\x04fail" to the client and terminates.
 fn fail(s: *sslStream) noreturn {
-    @setCold(true);
     if (DEBUG) {
         std.debug.dumpCurrentStackTrace(@frameAddress());
         warn("fail\n", .{});
@@ -583,7 +577,7 @@ const CB_Ctx = struct {
     s: *sslStream,
 };
 
-fn keyloader(_id: [*c]u8, arg: ?*anyopaque, _sigpk: [*c]u8, _noisepk: [*c]u8) c_int {
+export fn keyloader(_id: [*c]u8, arg: ?*anyopaque, _sigpk: [*c]u8, _noisepk: [*c]u8) callconv(.c) c_int {
     var ctx: *CB_Ctx = undefined;
     if(arg) |_ctx| {
         ctx = @ptrCast(@alignCast(_ctx));
@@ -591,10 +585,9 @@ fn keyloader(_id: [*c]u8, arg: ?*anyopaque, _sigpk: [*c]u8, _noisepk: [*c]u8) c_
         return 1;
     }
 
-    const id: *[blake2b.digest_length]u8 = @ptrCast(_id);
-    utils.hexdump(id[0..]);
+    const id = _id[0..blake2b.digest_length];
 
-    const r: Pubkeys = ctx.cfg.authorized_keys.get(id.*) orelse  return 1;
+    const r: Pubkeys = ctx.cfg.authorized_keys.get(id.*) orelse return 1;
     const sigkey: *[sodium.crypto_sign_PUBLICKEYBYTES]u8 = @ptrCast(_sigpk);
     const noisekey: *[sodium.crypto_scalarmult_BYTES]u8 = @ptrCast(_noisepk);
     @memcpy(sigkey, r.sigkey[0..]);
@@ -1524,8 +1517,8 @@ pub fn main() !void {
     warn("{} listening on {}\n", .{std.os.linux.getpid(), addr});
 
     const to = posix.timeval{
-        .tv_sec = cfg.timeout,
-        .tv_usec = 0
+        .sec = cfg.timeout,
+        .usec = 0
     };
     try posix.setsockopt(srv.stream.handle, posix.SOL.SOCKET, posix.SO.SNDTIMEO, mem.asBytes(&to));
     try posix.setsockopt(srv.stream.handle, posix.SOL.SOCKET, posix.SO.RCVTIMEO, mem.asBytes(&to));
