@@ -25,5 +25,5 @@ start_server 3
 start_server 4
 
 trap "cleanup" INT
-tail -f 0/log
+tail -f 1/log
 #while true; do sleep 1 ;done
