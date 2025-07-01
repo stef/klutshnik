@@ -57,10 +57,8 @@ def processcfg(config):
   debug = config.get('debug', False)
 
   for server in servers.values():
-    try:
-        server['ssl_cert'] = os.path.expanduser(server.get('ssl_cert')) # only for dev, production system should use proper certs!
-    except TypeError: # ignore exception in case ssl_cert is not set, thus None is attempted to expand.
-        server['ssl_cert'] = None
+    if 'ssl_cert' not in server: continue
+    server['ssl_cert'] = os.path.expanduser(server['ssl_cert']) # only for dev, production system should use proper certs!
 
   if len(servers)>1:
       if config['threshold'] < 2:
@@ -176,6 +174,12 @@ def loadmeta(keyid):
       pkis = readall(fd, (pysodium.crypto_core_ristretto255_BYTES+1) * n)
     with open(f"{config['keystore']}/{keyid.hex()}/servers", 'rb') as fd:
        servers = tomlkit.load(fd)
+    servers=dict(servers)
+    for s in servers.keys():
+       servers[s]=dict(servers[s])
+       if 'bleaddr' in  servers[s]:
+          servers[s]['client_sk']=a2b_base64(servers[s]['client_sk'])
+          servers[s]['device_pk']=a2b_base64(servers[s]['device_pk'])
     m = connect_servers(servers)
   except FileNotFoundError:
     raise ValueError("unknown keyid")
@@ -201,8 +205,13 @@ def getltsigkey():
 def get_servers(keyid = None):
    servers = {}
    for name, s in config['servers'].items():
-      x = {'host': s['host'],
-           'port': s['port']}
+      if 'bleaddr' in s:
+         x={'bleaddr': s['bleaddr'],
+            'client_sk': s['client_sk'],
+            'device_pk': s['device_pk']}
+      else:
+         x = {'host': s['host'],
+              'port': s['port']}
       if 'ltsigkey' in s:
          x['ltsigkey']=s['ltsigkey']
       else:
@@ -266,11 +275,15 @@ def create(m, keyid, ltsigpub, ltsigkey, t, ts_epsilon, sig_pks):
     peer_msgs = []
     if ret:
       if sizes[0] > 0:
-        peer_msgs_sizes = m.gather(2,n) #,debug=True)
+        #print(f"step({cur_step}) gathering sizes", file=sys.stderr)
+        peer_msgs_sizes = m.gather(2,n)
+        #print(f"step({cur_step}) received {[len(r) for r in peer_msgs_sizes]}", file=sys.stderr)
         for i, (msize, size) in enumerate(zip(peer_msgs_sizes, sizes)):
           if struct.unpack(">H", msize)[0]!=size:
             raise ValueError(f"peer{i} ({m[i].name}{m[i].address}) sent invalid sized ({msize}) response, should be {size}")
-        peer_msgs = m.gather(sizes[0],n) #,debug=True)
+        #print(f"step({cur_step}) gathering {sizes[0]}", file=sys.stderr)
+        peer_msgs = m.gather(sizes[0],n)
+        #print(f"step({cur_step}) received {[len(r) for r in peer_msgs]}", file=sys.stderr)
     else:
       peer_msgs = [read_pkt(m, i) if s>0 else b'' for i, s in enumerate(sizes)]
     for i, (pkt, size) in enumerate(zip(peer_msgs, sizes)):
@@ -292,7 +305,7 @@ def create(m, keyid, ltsigpub, ltsigkey, t, ts_epsilon, sig_pks):
         raise ValueError(msg)
       else:
         raise ValueError(f"{e} | tp step {cur_step}")
-    #print(f"outlen: {len(out)}", file=sys.stderr)
+    #print(f"step({cur_step}) outlen: {len(out)}", file=sys.stderr)
     if(len(out)>0):
       for i in range(pyoprf.stp_dkg_stpstate_n(stp)):
         msg = pyoprf.stp_dkg_stp_peer_msg(stp, out, i)
@@ -369,7 +382,7 @@ def rotate(m, keyid, ltsigpub, ltsigkey, t, ts_epsilon, sig_pks, lepoch):
   pki = pyoprf.thresholdmult(pkis[:t])
 
   epoch = set(struct.unpack(">I", r[0])[0] for r in resps)
-  if len(epoch) != 1: raise ValueError(f"inconsistent epochs received: {tmp}")
+  if len(epoch) != 1: raise ValueError(f"inconsistent epochs received: {epoch}")
   epoch = tuple(epoch)[0]
   if epoch <= lepoch: raise ValueError(f"locally cached epoch({lepoch}) is greater or equal to rotated epoch({epoch})")
 
@@ -638,6 +651,10 @@ def import_cfg(keyid, ltsigpub, ltsigkey, export):
    owner_keyid = a2b_base64(data['keyid'])
 
    servers = {name: {k:v for k, v in s.items()} for name,s in data['servers'].items()}
+   for s in data['servers'].values():
+      if "bleaddr" in s:
+         s['client_sk']=a2b_base64(s['client_sk'])
+         s['device_pk']=a2b_base64(s['device_pk'])
 
    m = connect_servers(data['servers'])
    # load peer long-term keys
@@ -652,7 +669,7 @@ def import_cfg(keyid, ltsigpub, ltsigkey, export):
    pkis = [x[1] for x in resps]
    pki = pyoprf.thresholdmult(pkis[:t])
    epoch = set(struct.unpack(">I", r[0])[0] for r in resps)
-   if len(epoch) != 1: raise ValueError(f"inconsistent epochs received: {tmp}")
+   if len(epoch) != 1: raise ValueError(f"inconsistent epochs received: {epoch}")
    epoch = tuple(epoch)[0]
 
    savemeta(owner_keyid, pki, pkis, t, epoch, servers)
@@ -687,7 +704,13 @@ def getargs(config, cmd, params):
       t = config['threshold']
       ts_epsilon=config['ts_epsilon']
       sig_pks = [a2b_base64(config['ltsigpub'][8:])]
+      servers={}
       for name, server in config['servers'].items():
+         server=dict(server)
+         servers[name]=(server)
+         if 'bleaddr' in server:
+            server['client_sk']=a2b_base64(server['client_sk'])
+            server['device_pk']=a2b_base64(server['device_pk'])
          if 'ltsigkey' in server:
             sig_pks.append(a2b_base64(server['ltsigkey']))
             continue
@@ -697,7 +720,7 @@ def getargs(config, cmd, params):
              raise ValueError(f"long-term signature key for server {name} is of incorrect size")
            sig_pks.append(ltpk)
       ltsigkey = getltsigkey()
-      m = Multiplexer(config['servers'])
+      m = Multiplexer(servers)
       m.connect()
       return m, keyid, sig_pks[0], ltsigkey, t, ts_epsilon, sig_pks
 
@@ -834,13 +857,13 @@ def main(params=sys.argv):
   global config
   config = processcfg(getcfg('klutshnik'))
 
-  if debug:
-    import ctypes
-    libc = ctypes.cdll.LoadLibrary('libc.so.6')
-    fdopen = libc.fdopen
-    log_file = ctypes.c_void_p.in_dll(pyoprf.liboprf,'log_file')
-    fdopen.restype = ctypes.c_void_p
-    log_file.value = fdopen(2, 'w')
+  #if debug:
+  #  import ctypes
+  #  libc = ctypes.cdll.LoadLibrary('libc.so.6')
+  #  fdopen = libc.fdopen
+  #  log_file = ctypes.c_void_p.in_dll(pyoprf.liboprf,'log_file')
+  #  fdopen.restype = ctypes.c_void_p
+  #  log_file.value = fdopen(2, 'w')
 
   op = cmds[params[1]]
   if len(params) != op['params']: usage(params)
@@ -859,10 +882,11 @@ def main(params=sys.argv):
   except Exception as exc:
     error = exc
     ret = False
+    if m is not None: m.close()
     if debug: raise
   finally:
-     if ltsigkey is not None: clearmem(ltsigkey)
-     if m is not None: m.close()
+    if ltsigkey is not None: clearmem(ltsigkey)
+    if m is not None: m.close()
 
   if not ret:
     if not error:
