@@ -14,13 +14,13 @@ To clone this repo on [Radicle](https://radicle.xyz), simply run:
 
 # WARNING
 
-WARNING! this is very early alpha-grade proof of concept, it is
-intended for interested parties to poke at and play with it. It is not
-intended for any even half-serious use yet.
+WARNING! this is beta quality software, it needs testing, it is intended for
+interested parties to poke at and play with it. It is not intended for serious
+use yet.
 
 # Verifiable Threshold Updatable Oblivious Key Management for Storage Systems
 
-This is a PoC implementing the full VTUOKMS from
+This project implements the full VTUOKMS client and KMS from:
 
 https://eprint.iacr.org/2019/1275
 "Updatable Oblivious Key Management for Storage Systems"
