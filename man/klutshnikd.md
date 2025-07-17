@@ -8,7 +8,7 @@ klutshnikd - Klutshnik KMS server
 
 # DESCRIPTION
 
-klutshnikd is a server for an updatable threshold Key Managment Server
+klutshnikd is a server for an updatable threshold Key Management Server
 (KMS) protocol. In this system the `client` interacts with a `KMS` -
 which stores securely and efficiently secret key material -, in
 order to decrypt and rotate keys for data that is stored in encrypted

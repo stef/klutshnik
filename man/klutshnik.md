@@ -30,7 +30,7 @@ klutshnik - command-line client for an updatable threshold KMS system
 
 # DESCRIPTION
 
-klutshnik is a CLI client for an updatable threshold Key Managment
+klutshnik is a CLI client for an updatable threshold Key Management
 Server (KMS) protocol. In this system the `client` interacts with a `KMS` -
 which stores securely and efficiently secret key material -, in
 order to decrypt and rotate keys for data that is stored in encrypted
