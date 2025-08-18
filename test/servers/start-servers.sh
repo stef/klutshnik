@@ -9,7 +9,7 @@ cleanup() {
  exit
 }
 
-function start_server() {
+start_server() {
    printf "starting klutshnikd %s\n" "$1"
    cd "$1"
    "$ORACLE" >log 2>&1 &
@@ -25,5 +25,5 @@ start_server 3
 start_server 4
 
 trap "cleanup" INT
-tail -f 0/log
+tail -f 1/log
 #while true; do sleep 1 ;done
