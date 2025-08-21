@@ -177,7 +177,7 @@ def loadmeta(keyid):
     servers=dict(servers)
     for s in servers.keys():
        servers[s]=dict(servers[s])
-       if 'bleaddr' in  servers[s]:
+       if 'bleaddr' in servers[s] or 'usb_serial' in servers[s]:
           servers[s]['client_sk']=a2b_base64(servers[s]['client_sk'])
           servers[s]['device_pk']=a2b_base64(servers[s]['device_pk'])
     m = connect_servers(servers)
@@ -207,6 +207,10 @@ def get_servers(keyid = None):
    for name, s in config['servers'].items():
       if 'bleaddr' in s:
          x={'bleaddr': s['bleaddr'],
+            'client_sk': s['client_sk'],
+            'device_pk': s['device_pk']}
+      elif 'usb_serial' in s:
+         x={'usb_serial': s['usb_serial'],
             'client_sk': s['client_sk'],
             'device_pk': s['device_pk']}
       else:
@@ -319,8 +323,7 @@ def create(m, keyid, ltsigpub, ltsigkey, t, ts_epsilon, sig_pks):
 
   auth0 = sig_pks[0] + b'\x4f'
   sig = pysodium.crypto_sign_detached(auth0, ltsigkey)
-  for i in range(len(m)):
-    send_pkt(m, sig+auth0, i)
+  send_pkt(m, sig+auth0)
 
   return keyid, b'\x00\x00\x00\x00', pki, pkis
 
@@ -401,7 +404,8 @@ def decrypt(m, keyid, ltsigpub, ltsigkey, t, epoch, pubkey, pkis):
      raise ValueError(f"data is encrypted with a key from {fepoch}, while we have {epoch}. Someone forgot to update the encryption on this data.")
 
   w = os.read(0, pysodium.crypto_core_ristretto255_BYTES)
-  if not pysodium.crypto_core_ristretto255_is_valid_point(w): raise ValueError("w value is invalid")
+  if not pysodium.crypto_core_ristretto255_is_valid_point(w):
+     raise ValueError("w value is invalid")
 
   r = pysodium.crypto_core_ristretto255_scalar_random()
   a = pysodium.crypto_scalarmult_ristretto255(r, w)
@@ -652,7 +656,7 @@ def import_cfg(keyid, ltsigpub, ltsigkey, export):
 
    servers = {name: {k:v for k, v in s.items()} for name,s in data['servers'].items()}
    for s in data['servers'].values():
-      if "bleaddr" in s:
+      if "bleaddr" in s or 'usb_serial' in s:
          s['client_sk']=a2b_base64(s['client_sk'])
          s['device_pk']=a2b_base64(s['device_pk'])
 
@@ -708,7 +712,7 @@ def getargs(config, cmd, params):
       for name, server in config['servers'].items():
          server=dict(server)
          servers[name]=(server)
-         if 'bleaddr' in server:
+         if 'bleaddr' in server or 'usb_serial' in server:
             server['client_sk']=a2b_base64(server['client_sk'])
             server['device_pk']=a2b_base64(server['device_pk'])
          if 'ltsigkey' in server:
