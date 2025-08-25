@@ -4,10 +4,10 @@ CFLAGS?=-march=native -Wall -O2 -g \
        -Wformat=2 -Wconversion -Wimplicit-fallthrough \
 		 -fasynchronous-unwind-tables -fpic -fstack-clash-protection -fcf-protection=full \
 		 -Werror=format-security -Werror=implicit-function-declaration -Wl,-z,defs -Wl,-z,relro \
-		 -ftrapv -Wl,-z,noexecstack $(INCLUDES) -D_BSD_SOURCE -D_DEFAULT_SOURCE
+		 -ftrapv -Wl,-z,noexecstack -D_BSD_SOURCE -D_DEFAULT_SOURCE
 
 #LDFLAGS?=/usr/lib/liboprf.a /usr/lib/liboprf-noiseXK.a -lsodium
-LDFLAGS?=-loprf -lsodium
+LIBS=-loprf -lsodium
 CC?=gcc
 SOEXT?=so
 STATICEXT?=a
@@ -48,7 +48,7 @@ SOURCES=streamcrypt.c tuokms.c utils.c
 OBJECTS=$(patsubst %.c,%.o,$(SOURCES))
 
 libklutshnik.$(SOEXT): $(SOURCES)
-	$(CC) -fPIC -shared $(CPPFLAGS) $(CFLAGS) $(SOFLAGS) -o libklutshnik.$(SOEXT) $^ $(LDFLAGS)
+	$(CC) -fPIC -shared $(CPPFLAGS) $(CFLAGS) $(INCLUDES) $(SOFLAGS) -o libklutshnik.$(SOEXT) $^ $(LDFLAGS) $(LIBS)
 
 libklutshnik.$(STATICEXT): $(OBJECTS)
 	$(AR) rcs $@ $^
@@ -94,5 +94,8 @@ test: libklutshnik.$(SOEXT) libklutshnik.$(STATICEXT)
 
 clean:
 	@rm -f *.o libklutshnik.$(STATICEXT) libklutshnik.$(SOEXT) libklutshnik.pc
+
+%.o: %.c
+	$(CC) $(CFLAGS) -fPIC $(INCLUDES) -c $< -o $@
 
 PHONY: clean
