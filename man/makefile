@@ -13,3 +13,17 @@ clean:
 %.5: %.md
 	cp $(@:.5=.head) $@
 	cmark -t man $< >>$@
+
+$(DESTDIR)$(PREFIX)/share/man/man1/klutshnik.1:
+	mkdir -p $(DESTDIR)$(PREFIX)/share/man/man1/
+	cp $< $@
+$(DESTDIR)$(PREFIX)/share/man/man1/klutshnikd.1:
+	mkdir -p $(DESTDIR)$(PREFIX)/share/man/man1/
+	cp $< $@
+$(DESTDIR)$(PREFIX)/share/man/man5/klutshnik.cfg.5:
+	mkdir -p $(DESTDIR)$(PREFIX)/share/man/man5/
+	cp $< $@
+$(DESTDIR)$(PREFIX)/share/man/man5/klutshnikd.cfg.5:
+	mkdir -p $(DESTDIR)$(PREFIX)/share/man/man5/
+	cp $< $@
+
