@@ -1136,9 +1136,13 @@ fn auth(cfg: *const Config, s: *sslStream, op: KlutshnikOp, pk: *ed25519.PublicK
             log("failed to open auth file: {}\n", .{err}, reqid);
             fail(s);
         };
-        var auth_size: u64 = undefined;
+        var auth_size: usize = undefined;
         if(authfd.stat()) |st| {
-            auth_size = st.size;
+            if(st.size >= 1<<20) {
+                log("auth file too big: {}\n", .{st.size}, reqid);
+                fail(s);
+            }
+            auth_size = @truncate(st.size);
         } else |err| {
             log("failed to stat auth file: {}\n", .{err}, reqid);
             fail(s);
@@ -1332,9 +1336,13 @@ fn modauth(cfg: *const Config, s: *sslStream, req: *const ModAuthReq) void {
         log("failed to open auth file: {}\n", .{err}, &req.id);
         fail(s);
     };
-    var auth_size: u64 = undefined;
+    var auth_size: usize = undefined;
     if(authfd.stat()) |st| {
-        auth_size = st.size;
+        if(st.size >= 1<<20) {
+            log("auth file too big: {}\n", .{st.size}, &req.id);
+            fail(s);
+        }
+        auth_size = @truncate(st.size);
     } else |err| {
         log("failed to stat auth file: {}\n", .{err}, &req.id);
         fail(s);
