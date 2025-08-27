@@ -35,6 +35,14 @@
             .url = "git+https://github.com/stef/zig-bearssl/?ref=HEAD#e22c0ab2b0f11f4f363afb2c82ffab23a55ddfe2",
             .hash = "zig_bearssl-0.1.0-AAAAAKp9OQAkUZJVs3ROjTNOW0TNOI5ZeyP__4OSkqMS",
         },
+        .libsodium = .{
+            .url = "git+https://github.com/stef/libsodium.git#2ab5db6ec8d7a9c15b08329006e09c44dd51343e",
+            .hash = "N-V-__8AAFZOYQB-VA5qVnO-qbQ6UZorfIL42LkGXECpF7lp",
+        },
+        .liboprf = .{
+            .url = "git+https://github.com/stef/liboprf.git#dc04a2ac6cb6db11f8881a200b44476adb20d6eb",
+            .hash = "liboprf-0.9.1-2NAwiI1gEAB7ECfeaiJ3NltBTZ8YgdclJp-KqFJQ56ca",
+        },
     },
     .paths = .{
         "build.zig",

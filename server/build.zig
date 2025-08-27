@@ -1,4 +1,5 @@
 const std = @import("std");
+const builtin = @import("builtin");
 
 // Although this function looks imperative, note that its job is to
 // declaratively construct a build graph that will be executed by an external
@@ -17,6 +18,7 @@ pub fn build(b: *std.Build) void {
 
     const pie = b.option(bool, "pie", "Build a Position Independent Executable") orelse true;
     const relro = b.option(bool, "relro", "Force all relocations to be read-only after processing") orelse true;
+    const system_libs = b.option(bool, "system_libs", "Link with OS provided libraries") orelse true;
 
     // load the "zig-toml" dependency from build.zig.zon
     const toml_package = b.dependency("zig_toml", .{
@@ -59,20 +61,47 @@ pub fn build(b: *std.Build) void {
     exe.root_module.addImport("toml", toml_module);
     exe.root_module.addImport("bearssl", bearssl_module);
     exe.linkLibrary(bearssl_package.artifact("zig-bearssl"));
-    //exe.linkSystemLibrary2("oprf-noiseXK", .{ .preferred_link_mode = .static });
-    //exe.linkSystemLibrary2("oprf", .{ .preferred_link_mode = .static });
-    //exe.linkSystemLibrary2("sodium", .{ .preferred_link_mode = .static });
-    //exe.linkSystemLibrary("oprf");
-    //exe.linkSystemLibrary("sodium");
-    exe.addObjectFile(.{ .cwd_relative = ("/usr/lib/libsodium.a") });
-    exe.addObjectFile(.{ .cwd_relative = ("/usr/lib/liboprf.a") });
-    exe.addObjectFile(.{ .cwd_relative = ("/usr/lib/liboprf-noiseXK.a") });
-    exe.addSystemIncludePath(.{ .cwd_relative = "/usr/include/oprf/noiseXK/" });
-    exe.addSystemIncludePath(.{ .cwd_relative = "/usr/include/oprf/noiseXK/karmel" });
-    exe.addSystemIncludePath(.{ .cwd_relative = "/usr/include/oprf/noiseXK/karmel/minimal" });
     exe.addIncludePath(b.path("."));
     exe.addCSourceFile(.{ .file = b.path("src/workaround.c"), .flags = &[_][]const u8{"-Wall"} });
-    exe.addCSourceFile(.{ .file = b.path("cc-runtime/cc-runtime.c"), .flags = &[_][]const u8{"-Wall"} });
+
+    if(system_libs) {
+        //exe.linkSystemLibrary2("oprf-noiseXK", .{ .preferred_link_mode = .static });
+        //exe.linkSystemLibrary2("oprf", .{ .preferred_link_mode = .static });
+        //exe.linkSystemLibrary2("sodium", .{ .preferred_link_mode = .static });
+        //exe.linkSystemLibrary("oprf");
+        //exe.linkSystemLibrary("sodium");
+        exe.addObjectFile(.{ .cwd_relative = ("/usr/lib/libsodium.a") });
+        exe.addObjectFile(.{ .cwd_relative = ("/usr/lib/liboprf.a") });
+        exe.addObjectFile(.{ .cwd_relative = ("/usr/lib/liboprf-noiseXK.a") });
+        exe.addSystemIncludePath(.{ .cwd_relative = "/usr/include/oprf/noiseXK/" });
+        exe.addSystemIncludePath(.{ .cwd_relative = "/usr/include/oprf/noiseXK/karmel" });
+        exe.addSystemIncludePath(.{ .cwd_relative = "/usr/include/oprf/noiseXK/karmel/minimal" });
+        if(builtin.target.cpu.arch==.x86_64) {
+            exe.addCSourceFile(.{ .file = b.path("cc-runtime/cc-runtime.c"), .flags = &[_][]const u8{"-Wall"} });
+        }
+    } else {
+        // build vendored liboprf and libsodium
+        const libsodium_package = b.dependency("libsodium", .{
+            .target = target,
+            .optimize = optimize,
+            .@"test" = false, // `test` is a keyword in zig
+            .static = true,
+            .shared = false,
+            .pie = true
+        });
+        exe.linkLibrary(libsodium_package.artifact("sodium"));
+        exe.addIncludePath(libsodium_package.path("include"));
+
+        const liboprf_package = b.dependency("liboprf", .{
+            .target = target,
+            .optimize = optimize,
+        });
+        exe.linkLibrary(liboprf_package.artifact("liboprf"));
+        exe.addIncludePath(liboprf_package.path("src"));
+        exe.addIncludePath(liboprf_package.path("src/noise_xk/include"));
+        exe.addIncludePath(liboprf_package.path("src/noise_xk/include/karmel"));
+        exe.addIncludePath(liboprf_package.path("src/noise_xk/include/karmel/minimal"));
+    }
     //exe.linkLibC();
 
     // This declares intent for the executable to be installed into the
