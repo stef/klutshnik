@@ -384,12 +384,15 @@ fn loadcfg() anyerror!Config {
                     if (server.Table.keys.get("authorized_keys")) |v| {
                         const path = expandpath(v.String);
                         defer allocator.free(path);
-                        cfg.authorized_keys = load_pubkeys(path) catch |err| {
+                        if (load_pubkeys(path)) |retval| {
+                            cfg.authorized_keys = retval;
+                        } else |err| {
                             warn("failed to load authorized keys from {s}: {}\n", .{path, err});
-                            posix.exit(1);
-                        };
-                    } else if (std.os.argv.len != 2 or
-                                   !std.mem.eql(u8, std.mem.span(std.os.argv[1]), "init")) {
+                            if (std.os.argv.len != 2 or !std.mem.eql(u8, std.mem.span(std.os.argv[1]), "init")) {
+                                posix.exit(1);
+                            }
+                        }
+                    } else {
                         warn("missing authorized_keys in configuration\nabort.", .{});
                         posix.exit(1);
                     }
