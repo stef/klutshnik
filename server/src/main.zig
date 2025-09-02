@@ -388,7 +388,8 @@ fn loadcfg() anyerror!Config {
                             warn("failed to load authorized keys from {s}: {}\n", .{path, err});
                             posix.exit(1);
                         };
-                    } else {
+                    } else if (std.os.argv.len != 2 or
+                                   !std.mem.eql(u8, std.mem.span(std.os.argv[1]), "init")) {
                         warn("missing authorized_keys in configuration\nabort.", .{});
                         posix.exit(1);
                     }
