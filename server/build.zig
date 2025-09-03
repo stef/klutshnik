@@ -102,6 +102,11 @@ pub fn build(b: *std.Build) void {
         exe.addIncludePath(liboprf_package.path("src/noise_xk/include/karmel"));
         exe.addIncludePath(liboprf_package.path("src/noise_xk/include/karmel/minimal"));
     }
+
+    const options = b.addOptions();
+    options.addOption(bool, "system_libs", system_libs);
+    exe.root_module.addOptions("config", options);
+
     //exe.linkLibC();
 
     // This declares intent for the executable to be installed into the

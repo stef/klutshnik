@@ -10,6 +10,7 @@ const blake2b = std.crypto.hash.blake2.Blake2b256;
 const ed25519 = std.crypto.sign.Ed25519;
 const secret_allocator = @import("secret_allocator.zig");
 const utils = @import("utils.zig");
+const build_config = @import("config");
 
 pub const sodium = @cImport({
     @cInclude("sodium.h");
@@ -1490,7 +1491,7 @@ pub fn main() !void {
     try stdout.print("starting up klutshnik server\n", .{});
     try bw.flush(); // don't forget to flush!
 
-    if(DEBUG) {
+    if(DEBUG and build_config.system_libs==false ) {
         oprf_utils.debug = 1;
         stp_dkg.log_file = @ptrCast(stdio.fdopen(2,"w"));
     }
