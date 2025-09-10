@@ -36,7 +36,7 @@
             .hash = "zig_bearssl-0.1.0-AAAAAKp9OQAkUZJVs3ROjTNOW0TNOI5ZeyP__4OSkqMS",
         },
         .libsodium = .{
-            .url = "git+https://github.com/stef/libsodium.git#2ab5db6ec8d7a9c15b08329006e09c44dd51343e",
+            .url = "git+https://github.com/stef/libsodium.git#803e753e42bbc5065420fd42e5bb77930a66b813",
             .hash = "N-V-__8AAFZOYQB-VA5qVnO-qbQ6UZorfIL42LkGXECpF7lp",
         },
         .liboprf = .{
