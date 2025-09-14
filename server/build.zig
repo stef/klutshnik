@@ -87,7 +87,6 @@ pub fn build(b: *std.Build) void {
             .@"test" = false, // `test` is a keyword in zig
             .static = true,
             .shared = false,
-            .pie = true
         });
         exe.linkLibrary(libsodium_package.artifact("sodium"));
         exe.addIncludePath(libsodium_package.path("include"));

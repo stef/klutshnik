@@ -37,7 +37,7 @@
         },
         .libsodium = .{
             .url = "git+https://github.com/stef/libsodium.git#803e753e42bbc5065420fd42e5bb77930a66b813",
-            .hash = "N-V-__8AAFZOYQB-VA5qVnO-qbQ6UZorfIL42LkGXECpF7lp",
+            .hash = "N-V-__8AANRNYQDlxQr94AbeNBOjW0-Pu2SwrUFpfxvB39Ix",
         },
         .liboprf = .{
             .url = "git+https://github.com/stef/liboprf.git#dc04a2ac6cb6db11f8881a200b44476adb20d6eb",
