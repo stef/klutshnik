@@ -2,7 +2,7 @@ INCLUDES=$(shell pkgconf --cflags liboprf)
 CFLAGS?=-march=native -Wall -O2 -g \
        -fstack-protector-strong -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=3 \
        -Wformat=2 -Wconversion -Wimplicit-fallthrough \
-		 -fasynchronous-unwind-tables -fpic -fstack-clash-protection -fcf-protection=full \
+		 -fasynchronous-unwind-tables -fpic -fstack-clash-protection \
 		 -Werror=format-security -Werror=implicit-function-declaration -Wl,-z,defs -Wl,-z,relro \
 		 -ftrapv -Wl,-z,noexecstack -D_BSD_SOURCE -D_DEFAULT_SOURCE
 
