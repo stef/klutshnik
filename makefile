@@ -65,7 +65,7 @@ install: $(DESTDIR)$(PREFIX)/lib/libklutshnik.$(SOEXT) \
 
 uninstall: $(DESTDIR)$(PREFIX)/lib/libklutshnik.$(SOEXT) $(DESTDIR)$(PREFIX)/lib/libklutshnik.$(STATICEXT) \
            $(DESTDIR)$(PREFIX)/lib/pkgconfig/libklutshnik.pc \
-	        $(DESTDIR)$(PREFIX)/include/klutshnik/streamcrypt.h $(DESTDIR)$(PREFIX)/include/klutshnik/tuokms.h \
+	        $(DESTDIR)$(PREFIX)/include/klutshnik/streamcrypt.h $(DESTDIR)$(PREFIX)/include/klutshnik/tuokms.h
 	rm $^
 	rmdir $(PREFIX)/include/klutshnik/
 
