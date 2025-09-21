@@ -283,6 +283,8 @@ def create(m, keyid, ltsigpub, ltsigkey, t, ts_epsilon, sig_pks):
         peer_msgs_sizes = m.gather(2,n)
         #print(f"step({cur_step}) received {[len(r) for r in peer_msgs_sizes]}", file=sys.stderr)
         for i, (msize, size) in enumerate(zip(peer_msgs_sizes, sizes)):
+          if len(msize)!=2:
+            raise ValueError(f"peer{i} ({m[i].name}{m[i].address}) sent invalid length indicator (len({msize})) response, should be 2")
           if struct.unpack(">H", msize)[0]!=size:
             raise ValueError(f"peer{i} ({m[i].name}{m[i].address}) sent invalid sized ({msize}) response, should be {size}")
         #print(f"step({cur_step}) gathering {sizes[0]}", file=sys.stderr)
