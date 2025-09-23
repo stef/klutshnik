@@ -4,12 +4,32 @@ In this document we describe the Klutshnik system, we specify the
 format of data exchanged during the protocol runs and the format of
 the data stored persistently. We describe extensions, like
 authentication and authorization which were out of scope in the
-original academic paper.
+original academic paper[fn:UOKMS].
+
+[fn:UOKMS] "Updatable Oblivious Key Management for Storage Systems" by Stanislaw
+Jarecki, Hugo Krawczyk, and Jason Resch https://eprint.iacr.org/2019/1275
 
 ** About Klutshnik
 
-Klutshnik is a verifiable threshold updatable oblivious Key Management
-System (KMS) for data-at rest. It is based on:
+Klutshnik is a tool for encrypting files. It comes with two major
+innovations:
+
+   1. threshold setup: the decryption key is split among a number of
+      untrusted servers, of which only a fraction (the threshold) is
+      needed to decrypt your files.
+   2. forward secrecy/post-comprise security: the key can be regularly
+      updated, while the update of the encrypted files can be done
+      very cheaply by an untrusted storage server, without
+      reencrypting the files, and thus without the storage server
+      compromising the confidentality of the file.
+
+It must be noted, that this system provides confidentiality, and does
+not trust neither the key-share holders, nor the storage server in
+that regard. However integrity, and availability (up to the threshold)
+are expected to be provided by these servers.
+
+Thus Klutshnik is a verifiable threshold updatable oblivious Key
+Management System (KMS) for data-at rest. It is based on:
 
 "Updatable Oblivious Key Management for Storage Systems" by Stanislaw
 Jarecki, Hugo Krawczyk, and Jason Resch https://eprint.iacr.org/2019/1275
