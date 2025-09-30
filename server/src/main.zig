@@ -45,9 +45,9 @@ var s_state = secret_allocator.secretAllocator(allocator);
 const s_allocator = s_state.allocator();
 
 /// stdout
-const stdout_file = std.io.getStdOut().writer();
-var bw = std.io.bufferedWriter(stdout_file);
-const stdout = bw.writer();
+var stdout_buffer: [1024]u8 = undefined;
+var stdout_writer = std.fs.File.stdout().writer(&stdout_buffer);
+const stdout = &stdout_writer.interface;
 
 const sslStream = ssl.Stream(*net.Stream, *net.Stream);
 
@@ -156,11 +156,15 @@ const Config = struct {
 
 fn log(comptime msg: []const u8, args: anytype, recid: []const u8) void {
     const pid = std.os.linux.getpid();
-    warn("{} {} {x:0>64} ", .{ pid, conn.address, std.fmt.fmtSliceHexLower(recid) });
+    if(recid.len==0) {
+        warn("{d} {f} ", .{ pid, conn.address });
+    } else {
+        warn("{d} {f} {x} ", .{ pid, conn.address, recid });
+    }
     warn(msg, args);
 }
 
-fn sigHandler(sig: i32) callconv(.C) void {
+fn sigHandler(sig: i32) callconv(.c) void {
     if (sig == std.posix.SIG.PIPE) {
         std.c._exit(9);
     }
@@ -169,7 +173,7 @@ fn sigHandler(sig: i32) callconv(.C) void {
 fn setSigHandler() void {
     var sa: std.posix.Sigaction = .{
         .handler = .{ .handler = sigHandler },
-        .mask = std.posix.empty_sigset,
+        .mask = std.posix.sigemptyset(),
         .flags = std.posix.SA.RESTART,
     };
     std.posix.sigaction(std.posix.SIG.PIPE, &sa, null);
@@ -285,40 +289,38 @@ fn load_pubkeys(path: []const u8) !KeyStore {
 
     // Wrap the file reader in a buffered reader.
     // Since it's usually faster to read a bunch of bytes at once.
-    var buf_reader = std.io.bufferedReader(file.reader());
-    const reader = buf_reader.reader();
-
-    var line = std.ArrayList(u8).init(allocator);
-    defer line.deinit();
+    var buffer = [_]u8{0} ** 1024;
+    var file_reader = file.reader(&buffer);
+    const reader = &(file_reader.interface);
 
     var k = [_]u8{0} ** sodium.crypto_generichash_BYTES;
 
-    const writer = line.writer();
-    while (reader.streamUntilDelimiter(writer, '\n', null)) {
-        // Clear the line so we can reuse it.
-        defer line.clearRetainingCapacity();
+    while (reader.takeDelimiterExclusive('\n')) |line| {
         var buf: [64]u8 = undefined;
-        try std.base64.standard.Decoder.decode(buf[0..], line.items);
+        try std.base64.standard.Decoder.decode(buf[0..], line);
         const v = allocator.alloc(Pubkeys,1) catch @panic("oom");
         @memcpy(&v[0].sigkey, buf[0..32]);
         @memcpy(&v[0].noisekey, buf[32..]);
         blake2b.hash(v[0].sigkey[0..], &k, .{});
         try map.put(k, v[0]);
-    } else |err| switch (err) {
-        error.EndOfStream => { // end of file
-            if (line.items.len > 0) {
-                defer line.clearRetainingCapacity();
-                var buf : [64]u8 = undefined;
-                try std.base64.standard.Decoder.decode(buf[0..], line.items);
-                const v = allocator.alloc(Pubkeys,1) catch @panic("oom");
-                @memcpy(&v[0].sigkey, buf[0..32]);
-                @memcpy(&v[0].noisekey, buf[32..]);
-                blake2b.hash(v[0].sigkey[0..], &k, .{});
-                try map.put(k, v[0]);
-            }
-        },
-        else => return err, // Propagate error
+    } else |err| if (err != error.EndOfStream) {
+        return err;
     }
+    //} else |err| switch (err) {
+    //    error.EndOfStream => { // end of file
+    //        if (line.len > 0) {
+    //            defer line.clearRetainingCapacity();
+    //            var buf : [64]u8 = undefined;
+    //            try std.base64.standard.Decoder.decode(buf[0..], line.items);
+    //            const v = allocator.alloc(Pubkeys,1) catch @panic("oom");
+    //            @memcpy(&v[0].sigkey, buf[0..32]);
+    //            @memcpy(&v[0].noisekey, buf[32..]);
+    //            blake2b.hash(v[0].sigkey[0..], &k, .{});
+    //            try map.put(k, v[0]);
+    //        }
+    //    },
+    //    else => return err, // Propagate error
+    //}
     return map;
 }
 
@@ -557,7 +559,7 @@ fn send_pkt(s: *sslStream, msg: []u8) void {
 
 fn tohexid(id: [32]u8) anyerror![]u8 {
     const hexbuf = allocator.alloc(u8, 64) catch @panic("oom");
-    return std.fmt.bufPrint(hexbuf, "{x:0>64}", .{std.fmt.fmtSliceHexLower(id[0..])});
+    return std.fmt.bufPrint(hexbuf, "{x}", .{id[0..]});
 }
 
 fn load(cfg: *const Config, path: []const u8, size: usize) ![]const u8 {
@@ -635,8 +637,11 @@ fn store(cfg: *const Config, recid: []const u8, fieldid: []const u8, data: []con
                                                .mode = private_mode});
     defer file.close();
 
-    var fw = file.writer();
-    try fw.writeAll(data);
+    var buffer = [_]u8{0} ** 1024;
+    var fw = file.writer(&buffer);
+    const writer = &fw.interface;
+    try writer.writeAll(data);
+    try writer.flush();
 }
 
 fn open(cfg: *const Config, recid: []const u8, fieldid: []const u8) !std.fs.File {
@@ -661,8 +666,10 @@ fn open(cfg: *const Config, recid: []const u8, fieldid: []const u8) !std.fs.File
 
 fn loadx(cfg: *const Config, recid: []const u8, fieldid: []const u8, data: []u8) !void {
     const file = try open(cfg,recid,fieldid);
-    var fr = file.reader();
-    _ = try fr.readAll(data[0..]);
+
+    var buffer = [_]u8{0} ** 1024;
+    var fr = file.reader(&buffer);
+    _ = try fr.read(data[0..]);
 }
 
 fn dkg(cfg: *const Config, s: *sslStream, req: *const CreateReq) *const [sodium.crypto_sign_PUBLICKEYBYTES]u8 {
@@ -1059,15 +1066,15 @@ fn toprf_update(cfg: *const Config, s: *sslStream, req: *const UpdateReq) void {
 
 fn handle_read_err(err: anyerror, s: *sslStream) noreturn {
     if (err == ssl.BearError.UNSUPPORTED_VERSION) {
-        warn("{} unsupported TLS version. aborting.\n", .{conn.address});
+        warn("{f} unsupported TLS version. aborting.\n", .{conn.address});
         s.close() catch unreachable;
         posix.exit(0);
     } else if (err == ssl.BearError.UNKNOWN_ERROR_582 or err == ssl.BearError.UNKNOWN_ERROR_552) {
-        warn("{} unknown TLS error: {}. aborting.\n", .{ conn.address, err });
+        warn("{f} unknown TLS error: {}. aborting.\n", .{ conn.address, err });
         s.close() catch unreachable;
         posix.exit(0);
     } else if (err == ssl.BearError.BAD_VERSION) {
-        warn("{} bad TLS version. aborting.\n", .{conn.address});
+        warn("{f} bad TLS version. aborting.\n", .{conn.address});
         s.close() catch unreachable;
         posix.exit(0);
     }
@@ -1088,7 +1095,7 @@ fn read_req(s: *sslStream, comptime T: type, op: []const u8) anyerror!*T {
     }
     const req: *T = @ptrCast(buf[0..]);
 
-    log("{} op {s}\n", .{ conn.address, op }, &req.id);
+    log("{f} op {s}\n", .{ conn.address, op }, &req.id);
     return req;
 }
 
@@ -1125,7 +1132,7 @@ fn auth(cfg: *const Config, s: *sslStream, op: KlutshnikOp, pk: *ed25519.PublicK
         fail(s);
     };
     const owner_pk = ed25519.PublicKey.fromBytes(owner) catch |err| {
-        log("invalid pubkey for owner {x:0>64}: {}\n", .{owner, err}, reqid);
+        log("invalid pubkey for owner {x}: {}\n", .{owner, err}, reqid);
         fail(s);
     };
 
@@ -1153,8 +1160,9 @@ fn auth(cfg: *const Config, s: *sslStream, op: KlutshnikOp, pk: *ed25519.PublicK
             fail(s);
         }
         const authbuf= allocator.alloc(u8, auth_size) catch @panic("oom");
-        var fr = authfd.reader();
-        _ = fr.readAll(authbuf[0..]) catch |err| {
+        var buffer = [_]u8{0} ** 1024;
+        var fr = authfd.reader(&buffer);
+        _ = fr.read(authbuf[0..]) catch |err| {
             log("failed to load auth file: {}\n", .{err}, reqid);
             fail(s);
         };
@@ -1176,16 +1184,16 @@ fn auth(cfg: *const Config, s: *sslStream, op: KlutshnikOp, pk: *ed25519.PublicK
                     authorized = true;
                     break;
                 }
-                log("unauthorized {x:0>64}\n", .{std.fmt.fmtSliceHexLower(&pk.toBytes())}, reqbuf[1..1+sodium.crypto_generichash_BYTES]);
+                log("unauthorized {x}\n", .{&pk.toBytes()}, reqbuf[1..1+sodium.crypto_generichash_BYTES]);
             }
         }
         if(!authorized) {
-            log("unauthorized {x:0>64}\n", .{std.fmt.fmtSliceHexLower(&pk.toBytes())}, reqbuf[1..1+sodium.crypto_generichash_BYTES]);
+            log("unauthorized {x}\n", .{&pk.toBytes()}, reqbuf[1..1+sodium.crypto_generichash_BYTES]);
         }
     }
 
     sig.verify(data, pk.*) catch |err| {
-        log("auth fail using pk {x:0>64}: {}\n", .{std.fmt.fmtSliceHexLower(&pk.toBytes()), err}, reqbuf[1..1+sodium.crypto_generichash_BYTES]);
+        log("auth fail using pk {x}: {}\n", .{&pk.toBytes(), err}, reqbuf[1..1+sodium.crypto_generichash_BYTES]);
         warn("sig: ", .{}); utils.hexdump(sigbuf[0..siglen]);
         warn("data: ", .{}); utils.hexdump(data[0..]);
         warn("pk: ", .{}); utils.hexdump(&pk.toBytes());
@@ -1194,7 +1202,7 @@ fn auth(cfg: *const Config, s: *sslStream, op: KlutshnikOp, pk: *ed25519.PublicK
 
     if(authorized==false) fail(s);
 
-    log("successfully authenticated using pk {x:0>64}\n", .{std.fmt.fmtSliceHexLower(&pk.toBytes())}, reqbuf[1..1+sodium.crypto_generichash_BYTES]);
+    log("successfully authenticated using pk {x}\n", .{&pk.toBytes()}, reqbuf[1..1+sodium.crypto_generichash_BYTES]);
 }
 
 fn create(cfg: *const Config, s: *sslStream, req: *const CreateReq) void {
@@ -1213,7 +1221,7 @@ fn create(cfg: *const Config, s: *sslStream, req: *const CreateReq) void {
 
     const owner_pk: *const [sodium.crypto_sign_PUBLICKEYBYTES]u8 = dkg(cfg, s, req);
     const pk = ed25519.PublicKey.fromBytes(owner_pk.*) catch |err| {
-        log("invalid pubkey for owner {x:0>64}: {}\n", .{owner_pk, err}, &req.id);
+        log("invalid pubkey for owner {x}: {}\n", .{owner_pk, err}, &req.id);
         fail(s);
     };
     const auth_buf = read_pkt(s);
@@ -1228,7 +1236,7 @@ fn create(cfg: *const Config, s: *sslStream, req: *const CreateReq) void {
         log("failed to store auth: {}\n", .{err}, req.id[0..]);
         fail(s);
     };
-    log("success creating new key for owner {}\n", .{std.fmt.fmtSliceHexLower(owner_pk)}, &req.id);
+    log("success creating new key for owner {x}\n", .{owner_pk}, &req.id);
 }
 
 fn update(cfg: *const Config, s: *sslStream, req: *const UpdateReq) void {
@@ -1252,7 +1260,7 @@ fn update(cfg: *const Config, s: *sslStream, req: *const UpdateReq) void {
     if(!utils.dir_exists(path)) fail(s);
 
     toprf_update(cfg, s, req);
-    log("success updating key by {}\n", .{std.fmt.fmtSliceHexLower(&req.pk)}, &req.id);
+    log("success updating key by {x}\n", .{&req.pk}, &req.id);
 }
 
 fn decrypt(cfg: *const Config, s: *sslStream, req: *const DecryptReq) void {
@@ -1285,7 +1293,7 @@ fn decrypt(cfg: *const Config, s: *sslStream, req: *const DecryptReq) void {
         warn("failed to flush connection: {}\n", .{e});
         fail(s);
     };
-    log("success decrypt by {}\n", .{std.fmt.fmtSliceHexLower(&req.pk)}, &req.id);
+    log("success decrypt by {x}\n", .{&req.pk}, &req.id);
 }
 
 fn delete(cfg: *const Config, s: *sslStream, req: *const DeleteReq) void {
@@ -1318,7 +1326,7 @@ fn delete(cfg: *const Config, s: *sslStream, req: *const DeleteReq) void {
         log("failed to flush confirmation of deletion: {}\n", .{err}, hexid);
         fail(s);
     };
-    log("success decrypt by {}\n", .{std.fmt.fmtSliceHexLower(&req.pk)}, &req.id);
+    log("success decrypt by {x}\n", .{&req.pk}, &req.id);
 }
 
 fn modauth(cfg: *const Config, s: *sslStream, req: *const ModAuthReq) void {
@@ -1353,15 +1361,16 @@ fn modauth(cfg: *const Config, s: *sslStream, req: *const ModAuthReq) void {
         fail(s);
     }
     const authbuf= allocator.alloc(u8, auth_size) catch @panic("oom");
-    var fr = authfd.reader();
-    _ = fr.readAll(authbuf[0..]) catch |err| {
+    var buffer = [_]u8{0} ** 1024;
+    var fr = authfd.reader(&buffer);
+    _ = fr.read(authbuf[0..]) catch |err| {
         log("failed to load auth file: {}\n", .{err}, &req.id);
         fail(s);
     };
     send_pkt(s, authbuf);
 
     if(req.readonly == 1) {
-        log("list auth success by {}\n", .{std.fmt.fmtSliceHexLower(&pk.toBytes())}, &req.id);
+        log("list auth success by {x}\n", .{&pk.toBytes()}, &req.id);
         return;
     }
 
@@ -1380,7 +1389,7 @@ fn modauth(cfg: *const Config, s: *sslStream, req: *const ModAuthReq) void {
         fail(s);
     };
 
-    log("mod auth success by {}\n", .{std.fmt.fmtSliceHexLower(&pk.toBytes())}, &req.id);
+    log("mod auth success by {x}\n", .{&pk.toBytes()}, &req.id);
 }
 
 fn refresh(cfg: *const Config, s: *sslStream, req: *const RefreshReq) void {
@@ -1419,7 +1428,7 @@ fn refresh(cfg: *const Config, s: *sslStream, req: *const RefreshReq) void {
         warn("failed to flush connection: {}\n", .{e});
         fail(s);
     };
-    log("refresh success by {}\n", .{std.fmt.fmtSliceHexLower(&pk.toBytes())}, &req.id);
+    log("refresh success by {x}\n", .{&pk.toBytes()}, &req.id);
 }
 
 fn handler(cfg: *const Config, s: *sslStream) !void {
@@ -1478,7 +1487,7 @@ fn handler(cfg: *const Config, s: *sslStream) !void {
             refresh(cfg, s, req);
         },
         _ => {
-            if (cfg.verbose) warn("{} invalid op({}). aborting.\n", .{ conn.address, op });
+            if (cfg.verbose) warn("{f} invalid op({}). aborting.\n", .{ conn.address, op });
         },
     }
     try s.close();
@@ -1489,7 +1498,7 @@ fn handler(cfg: *const Config, s: *sslStream) !void {
 /// number of childs is configurable, as is the listening IP address and port
 pub fn main() !void {
     try stdout.print("starting up klutshnik server\n", .{});
-    try bw.flush(); // don't forget to flush!
+    try stdout.flush(); // don't forget to flush!
 
     if(DEBUG and build_config.system_libs==false ) {
         oprf_utils.debug = 1;
@@ -1520,7 +1529,7 @@ pub fn main() !void {
             posix.AF.UNIX => addrtype = "unix",
             else => unreachable,
         }
-        warn("addr: {s}, {}\n", .{ addrtype, addr });
+        warn("addr: {s}, {f}\n", .{ addrtype, addr });
     }
 
     const addr = try net.Address.parseIp(cfg.address, cfg.port);
@@ -1535,7 +1544,7 @@ pub fn main() !void {
             //unreachable,
         },
     };
-    warn("{} listening on {}\n", .{std.os.linux.getpid(), addr});
+    warn("{} listening on {f}\n", .{std.os.linux.getpid(), addr});
 
     const to = posix.timeval{
         .sec = cfg.timeout,

@@ -49,9 +49,11 @@ pub fn build(b: *std.Build) void {
 
     const exe = b.addExecutable(.{
         .name = "klutshnikd",
-        .root_source_file = b.path("src/main.zig"),
-        .target = target,
-        .optimize = optimize,
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("src/main.zig"),
+            .target = target,
+            .optimize = optimize,
+        }),
         .linkage = .static,
     });
 
@@ -76,9 +78,6 @@ pub fn build(b: *std.Build) void {
         exe.addSystemIncludePath(.{ .cwd_relative = "/usr/include/oprf/noiseXK/" });
         exe.addSystemIncludePath(.{ .cwd_relative = "/usr/include/oprf/noiseXK/karmel" });
         exe.addSystemIncludePath(.{ .cwd_relative = "/usr/include/oprf/noiseXK/karmel/minimal" });
-        if(builtin.target.cpu.arch==.x86_64) {
-            exe.addCSourceFile(.{ .file = b.path("cc-runtime/cc-runtime.c"), .flags = &[_][]const u8{"-Wall"} });
-        }
     } else {
         // build vendored liboprf and libsodium
         const libsodium_package = b.dependency("libsodium", .{

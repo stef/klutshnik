@@ -28,20 +28,20 @@
     // internet connectivity.
     .dependencies = .{
         .zig_toml = .{
-            .url = "git+https://github.com/stef/zig-toml/?ref=HEAD#60653131b28386466dde827f6342222bbc0f16a7",
-            .hash = "zig_toml-0.1.0-AAAAALyuAADc57mdQXxmf1Lc1r1rDe5brlr_igwYiWxK",
+            .url = "git+https://github.com/stef/zig-toml.git#016674a73bb23dc07f5ba0aa9971d16727a24dc6",
+            .hash = "zig_toml-0.1.0-ngd9hwSxAAAvD39GxGG1qy6V2Y9M8N8zbeYSsNi98Ghr",
         },
         .zig_bearssl = .{
-            .url = "git+https://github.com/stef/zig-bearssl/?ref=HEAD#e22c0ab2b0f11f4f363afb2c82ffab23a55ddfe2",
-            .hash = "zig_bearssl-0.1.0-AAAAAKp9OQAkUZJVs3ROjTNOW0TNOI5ZeyP__4OSkqMS",
+            .url = "git+https://github.com/stef/zig-bearssl.git#8472ad6494cbed58f47294cee12a37cff056e41a",
+            .hash = "zig_bearssl-0.1.0-bPWRRBh-OQBoL3HshlSCt4oANHYbwAhZfzY6FU8-R4IM",
         },
         .libsodium = .{
-            .url = "git+https://github.com/stef/libsodium.git#803e753e42bbc5065420fd42e5bb77930a66b813",
-            .hash = "N-V-__8AANRNYQDlxQr94AbeNBOjW0-Pu2SwrUFpfxvB39Ix",
+            .url = "git+https://github.com/jedisct1/libsodium.git#09e995c0c85a0026510704b8ce7f5867a09a3841",
+            .hash = "N-V-__8AAONJYQCM2EvfTRcbTy_p9_e6hTjX34KAk0MItmwe",
         },
         .liboprf = .{
-            .url = "git+https://github.com/stef/liboprf.git#dc04a2ac6cb6db11f8881a200b44476adb20d6eb",
-            .hash = "liboprf-0.9.1-2NAwiI1gEAB7ECfeaiJ3NltBTZ8YgdclJp-KqFJQ56ca",
+            .url = "git+https://github.com/stef/liboprf.git#86ed6dac5c41aca2d9391180f6fb576f39e57cb7",
+            .hash = "liboprf-0.9.1-2NAwiIPDEADWQI2XGdOpTU2WkOCFJabSXFJjIa8sNUDa",
         },
     },
     .paths = .{

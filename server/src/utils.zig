@@ -11,7 +11,7 @@ pub fn hexdump(buf: []const u8) void {
 
 pub fn dir_exists(path: []const u8) bool {
     var cwd = std.fs.cwd();
-    const args: std.fs.Dir.OpenDirOptions = undefined;
+    const args: std.fs.Dir.OpenOptions = undefined;
     var dir = cwd.openDir(path, args) catch return false;
     dir.close();
     return true;
