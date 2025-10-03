@@ -62,7 +62,7 @@ pub fn build(b: *std.Build) void {
     exe.bundle_compiler_rt = true;
     exe.root_module.addImport("toml", toml_module);
     exe.root_module.addImport("bearssl", bearssl_module);
-    exe.linkLibrary(bearssl_package.artifact("zig-bearssl"));
+    //exe.linkLibrary(bearssl_package.artifact("zig-bearssl"));
     exe.addIncludePath(b.path("."));
     exe.addCSourceFile(.{ .file = b.path("src/workaround.c"), .flags = &[_][]const u8{"-Wall"} });
 
