@@ -1544,7 +1544,7 @@ pub fn main() !void {
             //unreachable,
         },
     };
-    warn("{} listening on {f}\n", .{std.os.linux.getpid(), addr});
+    warn("{d} listening on {f}\n", .{std.os.linux.getpid(), addr});
 
     const to = posix.timeval{
         .sec = cfg.timeout,
@@ -1586,10 +1586,10 @@ pub fn main() !void {
         switch (pid) {
             0 => {
                 setSigHandler();
-                var sc: ssl.c.br_ssl_server_context = undefined;
+                var sc = mem.zeroes(ssl.c.br_ssl_server_context);
                 //c.br_ssl_server_init_full_ec(&sc, certs, certs_len, c.BR_KEYTYPE_EC, &sk.key.ec);
                 ssl.c.br_ssl_server_init_minf2c(&sc, certs, certs_len, &sk.key.ec);
-                var iobuf: [ssl.c.BR_SSL_BUFSIZE_BIDI]u8 = undefined;
+                var iobuf = mem.zeroes([ssl.c.BR_SSL_BUFSIZE_BIDI]u8);
                 ssl.c.br_ssl_engine_set_buffer(&sc.eng, &iobuf, iobuf.len, 1);
                 // * Reset the server context, for a new handshake.
                 if (ssl.c.br_ssl_server_reset(&sc) == 0) {
