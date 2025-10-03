@@ -12,14 +12,9 @@
     // In a future version of Zig it will be used for package deduplication.
     .version = "0.1.0",
 
-    .minimum_zig_version = "0.14.1",
+    .minimum_zig_version = "0.15.1",
 
     .fingerprint = 0xfd6ec59f28d4dd4e,
-
-    // This field is optional.
-    // This is currently advisory only; Zig does not yet do anything
-    // with this value.
-    //.minimum_zig_version = "0.11.0",
 
     // This field is optional.
     // Each dependency must either provide a `url` and `hash`, or a `path`.
@@ -32,8 +27,8 @@
             .hash = "zig_toml-0.1.0-ngd9hwSxAAAvD39GxGG1qy6V2Y9M8N8zbeYSsNi98Ghr",
         },
         .zig_bearssl = .{
-            .url = "git+https://github.com/stef/zig-bearssl.git#8472ad6494cbed58f47294cee12a37cff056e41a",
-            .hash = "zig_bearssl-0.1.0-bPWRRBh-OQBoL3HshlSCt4oANHYbwAhZfzY6FU8-R4IM",
+            .url = "git+https://github.com/stef/zig-bearssl.git#cf7ce1a9d0d75f9e3620f88d0b5d9a23538d78ae",
+            .hash = "zig_bearssl-0.1.0-CB7xTIqkAADtxCnDYGnZZvYU76lvKDKELwvpshG-mH_e",
         },
         .libsodium = .{
             .url = "git+https://github.com/jedisct1/libsodium.git#09e995c0c85a0026510704b8ce7f5867a09a3841",
