@@ -28,6 +28,8 @@ klutshnik - command-line client for an updatable threshold KMS system
 
      klutshnik import <keyid> <KLTCFG-...> [<ltsigkey]
 
+     klutshnik provision <serial port> <klutshnik.cfg> <authorized_keys> <uart|esp> [<ltsigkey]
+
 # DESCRIPTION
 
 klutshnik is a CLI client for an updatable threshold Key Management
@@ -285,6 +287,46 @@ being authorized as follows:
 This command automatically runs internally a `refresh` operation to
 query the current epoch and public key related to this key. All this
 is stored in the local `keystore` of the user.
+
+### Provisioning Klutshnik Microcontroller Devices
+
+It is possible to run klutshnik servers on microcontrollers like ESP32, or
+Cortex-M series ARM devices (see https://github.com/stef/klutshnik-zephyr).
+After installing the firmware on these, they need to be configured like regular
+servers.
+
+```sh
+% klutshnik provision <serial port> <klutshnik.cfg> <authorized_keys> <uart|esp> [<ltsigkey]
+```
+
+Warning: if you add a new USB serial-based klutshnik device, make sure that the
+existing config has no `servers` subsection with the name `usb-cdc0` as that
+will be overwritten during the provisioning. If this happens anyway, a backup
+of the original config file is made.
+
+Parameters:
+
+ - `serial port`: is the first (some devices have two) serial port when connected
+   via USB associated with the device. A very common value is `/dev/ttyACM0`
+ - `klutshnik.cfg`: the client config file which will be consulted and updated
+   during the provisioning.
+ - `authorized_keys`: a file containing the authorized keys of all the other
+   klutshnik servers in the client setup. If they are not all available they
+   can be added later using the USB serial shell of the device (see the
+   firmware documentation for more details)
+ - `uart|esp` depending on whether the klutshnik device is communicating the
+   klutshnik protocol over the 2nd USB serial port or is an ESP32 device, this
+   must be set correctly.
+
+If everything goes correctly, the device gets the `authorized_keys` and the
+owners client ltsig/noise public keys and a new `servers` sub-section is added
+to the client configuration file provides as parameter. This new `servers`
+sub-section has either with their Bluetooth MAC as a name, or `usb-cdc0` in
+case of serial ports on USB. 
+
+At the end a base64 encoded `authorized_keys` entry is presented, which
+**MUST** be added to all `authorized_keys` files of all the other klutshnik
+servers in the client config.
 
 # SECURITY CONSIDERATIONS
 
