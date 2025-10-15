@@ -3,7 +3,8 @@
 # SPDX-FileCopyrightText: 2018-2021, Marsiske Stefan
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-import sys, os, struct, json, io, lzma, tempfile, tomlkit, shutil
+import sys, os, struct, json, io, lzma, tempfile, tomlkit, shutil, time
+from tempfile import NamedTemporaryFile
 import pysodium, pyoprf
 from klutshnik.cfg import getcfg
 from SecureString import clearmem
@@ -686,6 +687,104 @@ def import_cfg(keyid, ltsigpub, ltsigkey, export):
 
    return True
 
+def provision(port, cfg_file, cfg, authkeys, uart, esp):
+   # reset device
+   if esp:
+      from esptool.cmds import detect_chip
+      with detect_chip(port) as esp:
+         esp.connect()
+         esp.hard_reset()
+
+   import serial
+   serialPort = serial.Serial(port=port, baudrate=115200, timeout=0.5)
+   for _ in range(100):
+      line = serialPort.readline().decode("Ascii").strip()
+      if debug: print(line)
+      if 'no configuration found. waiting for client initialization' in line:
+         print("device is unintialized. sending client config", file=sys.stderr)
+         serialPort.reset_input_buffer()
+         ltsigpub = cfg['client']['ltsigpub'][8:]
+         serialPort.write(f'init ltsig {ltsigpub}\n'.encode('utf8'))
+         time.sleep(0.1)
+         noise_sk = pysodium.randombytes(32)
+         noise_pk = pyoprf.noisexk.pubkey(noise_sk)
+         serialPort.write(f'init noise {b2a_base64(noise_pk).decode('utf8').strip()}\n'.encode('utf8'))
+         time.sleep(0.1)
+         for ak in authkeys:
+            if ak.strip() == '': continue
+            serialPort.write(f"authkey add {ak}\n".encode('utf8'))
+            time.sleep(0.1)
+         break
+   else:
+      raise ValueError("unexpected initialization")
+
+   print("waiting a bit for device to generate its own keys", file=sys.stderr)
+   time.sleep(0.4)
+   # todo maybe check if any of the init ops gave any negative results
+   serialPort.reset_input_buffer()
+   # collect info
+   serialPort.write(b'getcfg noisepk\n')
+   time.sleep(0.1)
+   _ = serialPort.readline().decode("Ascii").strip()
+   line = serialPort.readline().decode("Ascii").strip()
+   npk=a2b_base64(line.split()[-1])
+
+   serialPort.reset_input_buffer()
+   serialPort.write(b'getcfg ltsigpk\n')
+   time.sleep(0.1)
+   _ = serialPort.readline().decode("Ascii").strip()
+   line = serialPort.readline().decode("Ascii").strip()
+   spk=a2b_base64(line.split()[-1])
+
+   if not uart:
+      serialPort.reset_input_buffer()
+      serialPort.write(b'getcfg mac\n')
+      time.sleep(0.1)
+      _ = serialPort.readline().decode("Ascii").strip()
+      line = serialPort.readline().decode("Ascii").strip()
+      if line == "No MAC, this klutshnik device doesn't do BLE":
+         mac=None
+      elif line.startswith('MAC address: '):
+         mac=line.split()[-2]
+      else:
+         print(line,file=sys.stderr)
+         raise ValueError("failed to retrieve mac address from device")
+      name = f"ble_{mac.replace(':','')}"
+   else:
+      mac=None
+      name = f"usb-cdc0"
+
+   table = None
+   # check if there is already a record with this mac
+   for k, server in cfg.get('servers',{}).items():
+      if k == name:
+         print(f'warning: there is already a server configured with the name "{name}", will overwrite values in there', file=sys.stderr)
+         shutil.copy2(cfg_file, f"{cfg_file}.bak")
+         table = server
+      elif uart is None and server.get('bleaddr') == mac:
+         print(f'warning: this config already has a server configured with the name: "{k}"\n'
+               f'you should merge this entry with the new entry called "{name}"', file=sys.stderr)
+   if table is None:
+      table = tomlkit.table(False)
+      cfg.get('servers').append(name, table)
+
+   if mac is not None:
+      table.update({'bleaddr': mac})
+   elif uart is not None:
+      table.update({'usb_serial': uart})
+
+   table.update({'ltsigkey': b2a_base64(spk).decode('utf8').strip(),
+                 'device_pk': b2a_base64(npk).decode('utf8').strip(),
+                 'client_sk': b2a_base64(noise_sk).decode('utf8').strip(),
+                 })
+
+   with NamedTemporaryFile(mode="w+", dir=os.path.dirname(cfg_file), delete=False, delete_on_close=False) as tmpfile:
+       tname = tmpfile.name
+       tomlkit.dump(cfg, tmpfile)
+   os.replace(tname, cfg_file);
+   print(f'please add {b2a_base64(spk+npk).decode().strip()} to all other klutshnikd servers authorized_keys files you intend to use in a group')
+   return True
+
 def usage(params, help=False):
   name = os.path.basename(params[0])
   print("usage:")
@@ -700,6 +799,7 @@ def usage(params, help=False):
   print("     %s deluser <keyid> <b64 pubkey> [<ltsigkey]" % name)
   print("     %s listusers <keyid> [<ltsigkey]" % name)
   print("     %s import <keyid> <KLTCFG-...> [<ltsigkey]" % name)
+  print("     %s provision <serial port> <klutshnik.cfg> <authorized_keys> <uart|esp> [<ltsigkey]" % name)
 
   if help: sys.exit(0)
   sys.exit(100)
@@ -815,6 +915,33 @@ def getargs(config, cmd, params):
       delta = pysodium.crypto_core_ristretto255_scalar_invert(delta)
       return keyid, delta, epoch
 
+   if cmd == provision:
+      port = "/dev/ttyACM0"
+      cfg_file = None
+      uart=False
+      esp=False
+      # parse args
+      for arg in params:
+         if arg.startswith('/dev/'):
+            port=arg
+         elif arg.endswith('.cfg'):
+            cfg_file = arg
+         elif arg.endswith('authorized_keys'):
+            with open(arg,'r') as fd:
+               authkeys=[line.strip() for line in fd]
+         elif arg=='uart':
+            import pyudev
+            context = pyudev.Context()
+            for device in context.list_devices(subsystem='tty'):
+                if device.device_node == port:
+                    uart=device.get('ID_SERIAL_SHORT')
+                    break
+         elif arg=="esp":
+            esp=True
+      with open(cfg_file,'rb') as fd:
+          cfg = tomlkit.load(fd)
+      return port, cfg_file, cfg, authkeys, uart, esp
+
 def process_result(cmd, ret):
    if cmd == create:
       keyid, epoch, pki, pkis = ret
@@ -850,6 +977,7 @@ cmds = {'init'     : {'cmd': init,      'params': 2},
         'deluser'  : {'cmd': deluser,   'params': 4},
         'listusers': {'cmd': listusers, 'params': 3},
         'import'   : {'cmd': import_cfg,'params': 4},
+        'provision': {'cmd': provision, 'params': 6},
         }
 
 def main(params=sys.argv):
@@ -878,7 +1006,7 @@ def main(params=sys.argv):
   m = None
   ltsigkey = None
   args = getargs(config, cmd, params[2:])
-  if cmd not in {encrypt, update, import_cfg}:
+  if cmd not in {encrypt, update, import_cfg, provision}:
      m = args[0]
      ltsigkey = args[3]
 
