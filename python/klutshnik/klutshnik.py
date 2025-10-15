@@ -924,7 +924,7 @@ def getargs(config, cmd, params):
       for arg in params:
          if arg.startswith('/dev/'):
             port=arg
-         elif arg.endswith('.cfg'):
+         elif arg.split('/')[-1] in {'klutshnik.cfg', 'config', '.klutshnikrc'}:
             cfg_file = arg
          elif arg.endswith('authorized_keys'):
             with open(arg,'r') as fd:
