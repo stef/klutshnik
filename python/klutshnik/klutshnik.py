@@ -52,6 +52,9 @@ def processcfg(config):
   servers = config.get('servers',{})
   config = config.get('client',{})
 
+  if 'keystore' not in config:
+     config['keystore']=os.path.expanduser('~/.local/klutshnik/keystore')
+
   config['threshold'] = int(config.get('threshold') or "1")
   config['ts_epsilon'] = int(config.get('ts_epsilon') or "1200")
   global debug
