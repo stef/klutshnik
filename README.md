@@ -258,3 +258,11 @@ more at the [NLnet project page](https://nlnet.nl/project/ThresholdOPRF).
 
 [<img src="https://nlnet.nl/logo/banner.png" alt="NLnet foundation logo" width="20%" />](https://nlnet.nl)
 [<img src="https://nlnet.nl/image/logos/NGI0_tag.svg" alt="NGI Zero Logo" width="20%" />](https://nlnet.nl/entrust)
+
+I want to express my gratitude to my love, who endures me working and
+rambling about this project. Peter Schwabe who invited me in 2022 to
+the HACS workshop which was so inspiring like nothing before, which
+spawned all this above. Trevor Perrin explained me how to implement a
+tOPRF, and Hugo Krawczyk who was patient enough to answer many of my
+ignorant questions. And Jonathan who helped me understand some tricky
+part of the DKG.
