@@ -17,3 +17,4 @@ test/servers/*/log
 man/*.1
 man/*.5
 test/otherclient/keystore
+man/*.html
