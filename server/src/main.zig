@@ -1217,7 +1217,10 @@ fn create(cfg: *const Config, s: *sslStream, req: *const CreateReq) void {
     const path = mem.concat(allocator, u8, &[_][]const u8{ cfg.datadir, "/", hexid[0..] }) catch @panic("oom");
     defer allocator.free(path);
 
-    if (utils.dir_exists(path)) fail(s);
+    if (utils.dir_exists(path)) {
+        log("record exists at {s}\n", .{path}, &req.id);
+        fail(s);
+    }
 
     const owner_pk: *const [sodium.crypto_sign_PUBLICKEYBYTES]u8 = dkg(cfg, s, req);
     const pk = ed25519.PublicKey.fromBytes(owner_pk.*) catch |err| {
