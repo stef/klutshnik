@@ -335,16 +335,16 @@ fn ssl_file_missing(path: []const u8) noreturn {
 
 fn loadcfg() anyerror!Config {
     const home = posix.getenv("HOME") orelse "/nonexistant";
-    const cfg1 = mem.concat(allocator, u8, &[_][]const u8{ home, "/.config/klutshnik/config" }) catch unreachable;
+    const cfg1 = mem.concat(allocator, u8, &[_][]const u8{ home, "/.config/klutshnikd/config" }) catch unreachable;
     defer allocator.free(cfg1);
-    const cfg2 = mem.concat(allocator, u8, &[_][]const u8{ home, "/.klutshnikrc" }) catch unreachable;
+    const cfg2 = mem.concat(allocator, u8, &[_][]const u8{ home, "/.klutshnikdrc" }) catch unreachable;
     defer allocator.free(cfg2);
 
     const paths = [_][]const u8{
-        "/etc/klutshnik/config",
+        "/etc/klutshnikd/config",
         cfg1,
         cfg2,
-        "klutshnik.cfg",
+        "klutshnikd.cfg",
     };
 
     // default values for the Config structure
