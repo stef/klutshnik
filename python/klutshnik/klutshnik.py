@@ -46,6 +46,8 @@ perm_str = { 0: 'none', 1: 'owner', 2: 'decrypt', 3: 'owner,decrypt', 4: 'update
 
 config = None
 
+# TODO/FIXME client_sk is now in klutshnik.cfg and in keystore/*/data without much protection.
+
 #### Helper fns ####
 
 def processcfg(config):
@@ -165,7 +167,7 @@ def connect_servers(setup):
 
 def loadmeta(keyid):
   if not os.path.exists(f"{config['keystore']}/{keyid.hex()}"):
-     raise ValueError("unknown keyid")
+     raise ValueError(f"unknown keyid: {keyid.hex()}")
   try:
     with open(f"{config['keystore']}/{keyid.hex()}/keyid", 'rb') as fd:
        keyid = fd.read(KEYID_SIZE)
