@@ -21,4 +21,4 @@ target.seccomp: target.strace
 	cd .. && zig build -Doptimize=Debug -freference-trace=11 -Dpie=true -Drelro=true -Dsystem_libs=false
 
 clean:
-	rm -rf minijail constants.json target.strace target.seccomp target.bpf
+	rm -rf minijail constants.json target.strace target.seccomp target.bpf ../../test/servers/1/strace.log
