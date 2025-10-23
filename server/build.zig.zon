@@ -27,8 +27,8 @@
             .hash = "zig_toml-0.1.0-ngd9hwSxAAAvD39GxGG1qy6V2Y9M8N8zbeYSsNi98Ghr",
         },
         .zig_bearssl = .{
-            .url = "git+https://github.com/stef/zig-bearssl.git#ac9c886f7178fa29ee16fef8a08cd90bda6b33a4",
-            .hash = "zig_bearssl-0.1.0-CB7xTBemAADHtnTa7jXw5EbssEiU7Wlb-wtds1oym5oQ",
+            .url = "git+https://github.com/stef/zig-bearssl.git#b871fe4b6556a04e7839f047a80787db54fa2b70",
+            .hash = "zig_bearssl-0.1.0-CB7xTPKkAAAON7lowLylrsZXLkCdwkQdT_IHY7ZjlStt",
         },
         .libsodium = .{
             .url = "git+https://github.com/jedisct1/libsodium.git#09e995c0c85a0026510704b8ce7f5867a09a3841",
