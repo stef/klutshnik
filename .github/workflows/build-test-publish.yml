@@ -50,7 +50,7 @@ jobs:
 
       # Step 4: Upload the binary as an artifact (optional)
       - name: Upload Binary
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: zig-binary
           path: server/zig-out/bin/ # Adjust path to match your build output
