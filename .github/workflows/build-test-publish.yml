@@ -60,8 +60,13 @@ jobs:
         with:
           name: klutshnikd-static
           path: server/zig-out/bin/klutshnikd
-      - name: Upload Seccomp Rules
+      - name: Upload Seccomp BPF
         uses: actions/upload-artifact@v4
         with:
           name: klutshnikd.bpf
           path: server/seccomp/target.bpf
+      - name: Upload Seccomp Profile
+        uses: actions/upload-artifact@v4
+        with:
+          name: klutshnikd.seccomp
+          path: server/seccomp/target.seccomp
