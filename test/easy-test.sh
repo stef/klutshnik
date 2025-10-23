@@ -1,7 +1,7 @@
 #!/bin/sh
 
-cd servers
-rm -rf */data/[0-9a-f]*
+cd servers || exit 1
+rm -rf ./*/data/[0-9a-f]*
 ORACLE_STRACE=1 ./start-servers.sh &
 SERVERS_PID=$!
 cd ..

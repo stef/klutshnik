@@ -4,29 +4,28 @@ ORACLE=${ORACLE:-../../../server/zig-out/bin/klutshnikd}
 PIDS=""
 
 cleanup() {
- echo cleanup killing klutshnikds ${PIDS}
- kill ${PIDS}
+ echo cleanup killing klutshnikds "${PIDS}"
+ kill "${PIDS}"
  exit
 }
 
 start_server() {
    printf "starting klutshnikd %s\n" "$1"
-   cd "$1"
-   if [ "$1" == "$ORACLE_STRACE"  ]; then
+   cd "$1" || exit 1
+   if [ "$1" = "$ORACLE_STRACE"  ]; then
       strace -I1 --kill-on-exit -fo strace.log "$ORACLE" >log 2>&1 &
    else
       "$ORACLE" >log 2>&1 &
    fi
    PIDS="$PIDS $!"
    sleep 0.1
-   cd - >/dev/null
 }
 
-start_server 0
-start_server 1
-start_server 2
-start_server 3
-start_server 4
+(start_server 0)
+(start_server 1)
+(start_server 2)
+(start_server 3)
+(start_server 4)
 
 trap "cleanup" INT TERM QUIT
 if [ -n "$ORACLE_TAIL" ]; then
