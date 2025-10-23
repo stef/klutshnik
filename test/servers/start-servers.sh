@@ -18,14 +18,15 @@ start_server() {
       "$ORACLE" >log 2>&1 &
    fi
    PIDS="$PIDS $!"
+   cd ..
    sleep 0.1
 }
 
-(start_server 0)
-(start_server 1)
-(start_server 2)
-(start_server 3)
-(start_server 4)
+start_server 0
+start_server 1
+start_server 2
+start_server 3
+start_server 4
 
 trap "cleanup" INT TERM QUIT
 if [ -n "$ORACLE_TAIL" ]; then
