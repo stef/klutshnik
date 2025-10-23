@@ -1,5 +1,5 @@
 import unittest
-from os import listdir, path
+from os import listdir, path, environ
 from pathlib import Path
 from shutil import rmtree
 from io import BytesIO, StringIO
@@ -165,11 +165,12 @@ class TestEndToEnd(unittest.TestCase):
       cls._oracles = []
       clean_dir('keystore')
       clean_dir('otherclient/keystore')
+      klutshnikd = environ.get("KLUTSHNIKD", "../../../server/zig-out/bin/klutshnikd")
       for idx in range(len(klutshnik.config['servers'])):
         clean_dir(f"{test_path}/servers/{idx}/data/")
         log = open(f"{test_path}/servers/{idx}/log", "w")
         cls._oracles.append(
-          (subprocess.Popen("../../../server/zig-out/bin/klutshnikd", cwd = f"{test_path}/servers/{idx}/", stdout=log, stderr=log, pass_fds=[log.fileno()]), log))
+          (subprocess.Popen(klutshnikd, cwd = f"{test_path}/servers/{idx}/", stdout=log, stderr=log, pass_fds=[log.fileno()]), log))
         log.close()
 
         ddir = f"{test_path}/servers/{idx}/data/"

@@ -27,6 +27,7 @@ jobs:
         run: |
           cd server
           zig build -Dcpu=baseline -Doptimize=ReleaseSafe -freference-trace=11 -Dpie=true -Drelro=true -Dsystem_libs=false
+          sudo cp zig-out/bin/klutshnikd /usr/bin
 
       # Step 4: build libklutshnik and test
       - run: |
@@ -46,7 +47,7 @@ jobs:
          pip3 install python/
          sudo ldconfig
          cd test
-         python3 -m unittest discover -fcb -v .
+         KLUTSHNIKD=/usr/bin/klutshnikd python3 -m unittest discover -fcb -v .
 
       # Step 4: Upload the binary as an artifact (optional)
       - name: Upload Binary
