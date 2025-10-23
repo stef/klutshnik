@@ -26,8 +26,8 @@ jobs:
       - name: Build Zig Binary
         run: |
           cd server
-          # zig build -Dcpu=baseline -Doptimize=ReleaseSafe -freference-trace=11 -Dpie=true -Drelro=true -Dsystem_libs=false
-          zig build -Dcpu=baseline -Doptimize=Debug -freference-trace=11 -Dpie=true -Drelro=true -Dsystem_libs=false
+          zig build -Dcpu=baseline -Doptimize=ReleaseSafe -freference-trace=11 -Dpie=true -Drelro=true -Dsystem_libs=false
+          # zig build -Dcpu=baseline -Doptimize=Debug -freference-trace=11 -Dpie=true -Drelro=true -Dsystem_libs=false
           sudo cp zig-out/bin/klutshnikd /usr/bin
 
       # Step 4: build libklutshnik and test
