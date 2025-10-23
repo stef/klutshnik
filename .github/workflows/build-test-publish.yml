@@ -48,6 +48,8 @@ jobs:
          pip3 install python/
          sudo ldconfig
          cd test
+         mkdir keystore
+         mkdir otherclient/keystore
          KLUTSHNIKD=/usr/bin/klutshnikd python3 -m unittest discover -fcb -v .
 
       - name: Archive Test Results
