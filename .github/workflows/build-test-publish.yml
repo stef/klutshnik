@@ -51,7 +51,7 @@ jobs:
          mkdir keystore
          mkdir otherclient/keystore
          KLUTSHNIKD=/usr/bin/klutshnikd python3 -m unittest discover -fcb -v .
-         cd server/seccomp
+         cd ../server/seccomp
          make
 
       # Step 5: Upload the binary as an artifact (optional)
