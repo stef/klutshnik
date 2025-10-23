@@ -45,7 +45,7 @@ jobs:
          # klutshnik
          pip3 install python/
          sudo ldconfig
-         cd tests
+         cd test
          python3 -m unittest discover -fcb -v .
 
       # Step 4: Upload the binary as an artifact (optional)
