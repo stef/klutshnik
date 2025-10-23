@@ -20,7 +20,7 @@ jobs:
       - name: Setup Zig Compiler
         uses: mlugg/setup-zig@v2
         with:
-          zig-version: 0.15.1 # Specify the Zig version you need
+          version: 0.15.1 # Specify the Zig version you need
 
       # Step 3: Build the Zig binary
       - name: Build Zig Binary
@@ -52,5 +52,5 @@ jobs:
       - name: Upload Binary
         uses: actions/upload-artifact@v4
         with:
-          name: zig-binary
-          path: server/zig-out/bin/ # Adjust path to match your build output
+          name: klutshnikd-static
+          path: server/zig-out/bin/klutshnikd
