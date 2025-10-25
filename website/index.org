@@ -1,0 +1,129 @@
+#+TITLE: Klutshnik Key-Management System
+#+AUTHOR: klutshnik
+#+OPTIONS:   H:2 num:t toc:nil \n:nil @:t ::t |:t ^:t -:t f:t *:t <:t
+#+OPTIONS:   TeX:t LaTeX:t skip:nil d:nil todo:t pri:nil tags:not-in-toc
+#+options:   tex:dvisvgm
+
+#+BEGIN_EXPORT html
+<style>
+    .org-svg {vertical-align: middle};
+</style>
+<img src="keeper7keys.jpg" style="float:right;position:absolute;right:10px;top:10px;" width="100em" />
+<ul >
+    <li style="display: inline;">Home</li>
+    <li style="display: inline;"><a href="client_install.html">Install Client</a></li>
+    <li style="display: inline;"><a href="servers.html">Find Servers</a></li>
+    <li style="display: inline;"><a href="server_install.html">Host Server</a></li>
+    <li style="display: inline;"><a href="device_install.html">Host Device</a></li>
+    <li style="display: inline;"><a href="docs.html">Docs</a></li>
+    <li style="display: inline;"><a href="code.html">Code</a></li>
+    <li style="display: inline;"><a href="faq.html">FAQ</a></li>
+</ul>
+<hr />
+#+END_EXPORT
+
+* About Klutshnik
+
+Klutshnik is a system which **encrypts data-at-rest**: backups, files,
+archives - for you or your group. Yawn, even PGP ~^W~ Age can do that. Yes,
+but they cannot do regular and cheap key updates on an untrusted
+storage, providing post-compromise security (PCS) or forward secrecy
+(FS). And they cannot do the best part, sharing the encryption key in a
+threshold setup, which is never even assembled, so chances of
+accidental leakage are 0.
+
+Klutshnik:
+ - is [[*Self-hosted and Free Software][free software]],
+ - compartments your keys from your plaintext,
+ - supports running on small [[./device_install.html][microcontrollers]],
+ - stores absolutely no private data.
+
+** System Roles
+
+In a klutshnik system there are 3 roles:
+
+ - A client who has data they want to store securely for usage in the
+   future.
+ - A storage, which can store large amounts of data cheaply and
+   reliably. This server is untrusted by the client, with the
+   exception that the client trusts the storage server to not corrupt
+   the stored data (integrity) and does not deny service to the client
+   (availability).
+ - A group of key managment servers (KMS), which the client can use to
+   decrypt the data stored at the storage servers, without these key
+   management servers only having access to parts of a secret that is
+   used to derive decryption keys securely without ever having access
+   to either cipher nor the plaintext stored at the storage server.
+
+** Data-at-rest vs Data-in-transit
+
+For data data-in-transit (messaging) we had post-compromise security
+and forward secrecy for quite a long time. Both these security
+properties (PCS & FS) are achieved by synchronously generating new
+keys at the sender and the receiver and using the updated keys for the
+next message to be sent. This way, if a key gets compromised only the
+messages that were encrypted with the key could be decrypted, but
+previous messages (forward secrecy) and future messages
+(post-compromise security) were safe.
+
+But how do you do that actually with data that you send to your future
+self? Which is basically what data-at-rest encryption is. For that we
+have to look how legacy tools do this kind of encryption. With PGP
+(but even with Age) you have a long-term asymmetric key - called in
+our model key-encryption-key (KEK) - which is used to encrypt a
+symmetric key - called the data-encryption-key (DEK) - which (grand
+surprise!) is used to encrypt the data. In klutshnik the KEK is shared
+among all the KMS and only used in an Oblivious Pseudo-random Function
+(OPRF) as a key to derive the DEK. Using an OPRF allows us to update
+the KEK without having to decrypt the DEK with the old KEK and
+re-encrypt with the new KEK (as would be the case with PGP/AGE, if
+they would support such a thing, but with those you would completely
+have to decrypt the file, and encrypt it with a new DEK).
+
+** Post-quantum and Harvest now, decrypt later
+
+With data-in-transit a adversary can just store all the encrypted
+messages and the various other protocol related data which is used for
+key calculation and store it until this adversary has the capability
+to break the calculation with a powerful attack (like post-quantum
+computers, but also other so far undiscovered attacks) to be deployed
+in the future. Since the data-in-transit goes over the internet,
+anywhere on that path is sufficient for the adversary to harvest.
+
+With data-at-rest this is quite different. Without access to the KEK
+the ciphertext is well protected and probably resistant to any
+post-quantum attack (hence adversaries looking for `~/.gnupg` and
+similar assets). The threat of Harvest-now-decrypt-later and
+quantum-cryptanalysis is much less prevalent, since data-at-rest is
+not traversing the internet at nodes harvested by adversaries (or if
+then it is probably encrypted with an additional layer of (hopefully
+pq-safe) data-in-transit encryption).
+
+* Self-hosted and Free Software
+
+Klutshnik is completely open source.
+
+You can host your own server for complete control, or use public
+servers with confidence knowing they can't access your data. See the
+[[file:server_install.org][server installation guide]] for more details on how to set up your own
+server.
+
+Klutshnik code is open source and available on GitHub:
+- **Reference implementation**: https://github.com/stef/klutshnik
+- **Microcontroller version**: https://github.com/stef/klutshnik-zephyr
+
+* Getting Started
+
+** Try Klutshnik
+
+To use Klutshnik, you need a client and a few servers.
+1. **Self-host**:
+    - Follow our [[file:server_install.org][server installation guide]]
+    - Follow our [[file:server_install.org][device installation guide]]
+2. [[file:client_install.org][Install a Klutshnik client]]
+
+* Acknowledgements
+
+This project is funded through [[https://nlnet.nl/entrust][NGI0 Entrust]], a fund established by
+[[https://nlnet.nl][NLnet]] with financial support from the European Commission's [[https://ngi.eu][Next
+Generation Internet]] program. Learn more at the [[https://nlnet.nl/project/ThresholdOPRF][NLnet project page]].

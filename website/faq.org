@@ -1,0 +1,92 @@
+
+#+TITLE: Klutshnik Key-Management System
+#+AUTHOR: klutshnik
+#+OPTIONS:   H:2 num:t toc:nil \n:nil @:t ::t |:t ^:t -:t f:t *:t <:t
+#+OPTIONS:   TeX:t LaTeX:t skip:nil d:nil todo:t pri:nil tags:not-in-toc
+#+options:   tex:dvisvgm
+
+#+BEGIN_EXPORT html
+<style>
+    .org-svg {vertical-align: middle};
+</style>
+<img src="keeper7keys.jpg" style="float:right;position:absolute;right:10px;top:10px;" width="100em" />
+<ul >
+    <li style="display: inline;"><a href="/">Home</a></li>
+    <li style="display: inline;"><a href="client_install.html">Install Client</a></li>
+    <li style="display: inline;"><a href="servers.html">Find Servers</a></li>
+    <li style="display: inline;"><a href="server_install.html">Host Server</a></li>
+    <li style="display: inline;"><a href="device_install.html">Host Device</a></li>
+    <li style="display: inline;"><a href="docs.html">Docs</a></li>
+    <li style="display: inline;"><a href="code.html">Code</a></li>
+    <li style="display: inline;">FAQ</li>
+</ul>
+<hr />
+#+END_EXPORT
+
+* How does the key-rotation work?
+
+It is really quite simple. For simplicity this is shown in a
+non-threshold setting first. The DEK is really the output of an OPRF,
+every file has a value ~w~ which is the input of the OPRF and the ~KEK~
+is held by the klutshnik server. Thus
+
+#+BEGIN_CENTER
+   $DEK = OPRF(KEK, w) = w \cdot KEK$
+#+END_CENTER
+
+We use a specific OPRF[fn:hashDH] which retains algebraic structure,
+so we can do mathy stuff with the DEK, such as updating the KEK, while
+the DEK remains unchanged. When we update, all we do is to have the
+klutshnik server choose a random value $\delta_{i}$ and calculates:
+
+#+BEGIN_CENTER
+   $KEK_{i+1} = KEK_{i} \cdot \delta_{i}$
+#+END_CENTER
+
+The server shares $\delta_{i}$ with the untrusted storage, which will adjust
+the ~w~ value for each encrypted file belonging to this key by:
+
+#+BEGIN_CENTER
+   $w_{i+1} = \frac{w_{i}}{\delta_{i}}$
+#+END_CENTER
+
+This all works simply because of the algebraic structure of the OPRF
+is preserved, and if we expand the OPRF we get the following:
+
+#+BEGIN_CENTER
+   $DEK = w_1 \cdot KEK_1 = w_0 \cdot KEK_0$
+
+   $\frac{w_0}{\delta_{0}} \cdot KEK_0 \cdot \delta_{0}$
+#+END_CENTER
+
+It is really just some very very simple multiplication and division
+with values represented by latin and greek letters.
+
+In the threshold setup the KEK is split among the shareholders using
+basic verifiable Shamirs Secret Sharing, and the new $KEK_{i+1}$ is
+being calculated by the shareholders by using a multi-party
+computation that multiplies two values shared with secret-sharing
+scheme.
+
+As you can see, neither the $w_{i}$ nor the $\delta_{i}$ values
+provide any information about either the $KEK_{i}$ nor the $DEK_{i}$,
+and can thus be known by the storage when doing the
+key-update. Remember we do trust the storage to provide integrity and
+availability and thus also implicitly to correctly calculate the
+updated $w_{i+1}$ values based on the $\delta_{i}$ update tokens,
+never learning either the DEK nor the KEK, and thus nothing about the
+plaintext.
+
+[fn:hashDH] Notable is that this OPRF is a hashDH style OPRF and not a
+more common 2HashDH OPRF, this is important, since this OPRF variant
+retains algebraic properties, which would be destroyed by the 2nd hash
+in the 2HashDH OPRFs.
+
+* What's with this weird name Klutshnik?
+
+It is a homage to the all the great cryptographers having a
+polish/slavic background. 'kljutsh' (or variations of it) means "key"
+in slavic languages, and the 'nik' postfix means something like
+"person" just like in beatnik. Together they mean "person of keys" or
+"key person". Anyway I think it is a much better name than GNU
+Keymaster 3000 Deluxe Pro.

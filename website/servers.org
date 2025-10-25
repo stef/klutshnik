@@ -1,0 +1,36 @@
+#+TITLE: Server-list - Klutshnik Key-Management System
+#+AUTHOR: klutshnik
+#+OPTIONS:   H:2 num:t toc:nil \n:nil @:t ::t |:t ^:t -:t f:t *:t <:t
+#+OPTIONS:   TeX:t LaTeX:t skip:nil d:nil todo:t pri:nil tags:not-in-toc
+
+#+BEGIN_EXPORT html
+<img src="keeper7keys.jpg" style="float:right;position:absolute;right:10px;top:10px;" width="100em" />
+<ul >
+    <li style="display: inline;"><a href="/">Home</a></li>
+    <li style="display: inline;"><a href="client_install.html">Install Client</a></li>
+    <li style="display: inline;">Find Servers</li>
+    <li style="display: inline;"><a href="server_install.html">Host Server</a></li>
+    <li style="display: inline;"><a href="device_install.html">Host Device</a></li>
+    <li style="display: inline;"><a href="docs.html">Docs</a></li>
+    <li style="display: inline;"><a href="code.html">Code</a></li>
+    <li style="display: inline;"><a href="faq.html">FAQ</a></li>
+</ul>
+<hr />
+#+END_EXPORT
+
+* Public Servers
+
+List of public Klutshnik servers
+
+|----------------+------+------------------------------------------------------------------+------------------------------------------------+-----------------------------|
+| hostname       | port | onion url                                                        | long-term signature pubkey                     | website                     |
+|----------------+------+------------------------------------------------------------------+------------------------------------------------+-----------------------------|
+|----------------+------+------------------------------------------------------------------+------------------------------------------------+-----------------------------|
+
+* Contributing to the Public Server Network
+
+If you operate a reliable Klutshnik server and want to make it available
+to the community, consider reaching out to the project maintainers and
+we can add it here. Community-operated servers strengthen the
+overall KPHINX ecosystem by providing more options for threshold configurations
+and reducing centralization.

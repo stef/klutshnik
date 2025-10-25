@@ -1,0 +1,69 @@
+#+TITLE: Docs - Klutshnik Key-Management System
+#+AUTHOR: klutshnik
+#+OPTIONS:   H:2 num:t toc:nil \n:nil @:t ::t |:t ^:t -:t f:t *:t <:t
+#+OPTIONS:   TeX:t LaTeX:t skip:nil d:nil todo:t pri:nil tags:not-in-toc
+
+#+BEGIN_EXPORT html
+<img src="keeper7keys.jpg" style="float:right;position:absolute;right:10px;top:10px;" width="100em" />
+<ul >
+    <li style="display: inline;"><a href="/">Home</a></li>
+    <li style="display: inline;"><a href="client_install.html">Install Client</a></li>
+    <li style="display: inline;"><a href="servers.html">Find Servers</a></li>
+    <li style="display: inline;"><a href="server_install.html">Host Server</a></li>
+    <li style="display: inline;"><a href="device_install.html">Host Device</a></li>
+    <li style="display: inline;">Docs</li>
+    <li style="display: inline;"><a href="code.html">Code</a></li>
+    <li style="display: inline;"><a href="faq.html">FAQ</a></li>
+</ul>
+<hr />
+#+END_EXPORT
+
+Klutshnik uses a client-threshold-server architecture where servers
+perform cryptographic operations on blinded input. The Klutshnik
+protocol only makes sense if the key-management server is located
+somewhere other than where you store your ciphertext or operate on
+your plaintext. The client is a command-line tool that provides access
+to all operations to help manage your passwords.
+
+* Operations
+
+The Klutshnik client provides the following operations: ~create~,
+~encrypt~, ~decrypt~, ~rotate~, ~refresh~, ~update~, ~adduser~,
+~deluser~, ~listusers~, ~import~, ~provision~, and ~delete~.  See the
+[[./manpages/klutshnik.html][klutshnik(1) manpage]] for how to use these operations.
+
+* Man pages
+
+- Server: [[./manpages/klutshnikd.html][klutshnikd(1)]]
+- CLI client: [[./manpages/klutshnik.html][klutshnik(1)]]
+
+* Designed by Established Cryptographers
+
+The main functionality is based on the UOKMS construction of the
+[[https://eprint.iacr.org/2019/1275][Updatable Oblivious Key Management for Storage Systems]] by Stanislaw
+Jarecki, Hugo Krawczyk, and Jason Resch
+
+The Threshold OPRF is based on: [[https://eprint.iacr.org/2017/363][TOPPSS: Cost-minimal
+Password-Protected Secret Sharing based on Threshold OPRF]] by Stanislaw
+Jarecki, Aggelos Kiayias, Hugo Krawczyk, and Jiayu Xu
+
+Within this, the DKG is based on /R. Gennaro, M. O. Rabin, and
+T. Rabin/. "Simplified VSS and fact-track multiparty computations with
+applications to threshold cryptography" In B.  A. Coan and Y. Afek,
+editors, 17th ACM PODC, pages 101–111. ACM, June / July 1998 and is
+fully [[https://github.com/stef/liboprf/tree/master/docs/stp-dkg.txt][specified in liboprf]].
+
+The key-update is based on: Fig. 2 from "Simplified VSS and fact-track
+multiparty computations with applications to threshold cryptography"
+by R. Gennaro, M. O. Rabin, and T.  Rabin. This is fully
+[[https://github.com/stef/liboprf/tree/master/docs/stp-update.txt][specified in liboprf]].
+
+The files are encrypted using ~crypto_secretbox()~ by [[https://github.com/jedisct1/libsodium][libsodium]], using
+the STREAM construction of [[https://eprint.iacr.org/2015/189]["Online Authenticated-Encryption and its
+Nonce-Reuse Misuse-Resistance"]] by Viet Tung Hoang, Reza Reyhanitabar,
+Phillip Rogaway, and Damian Vizár
+
+* Whitepaper
+
+We have a [[https://github.com/stef/klutshnik/blob/master/whitepaper.org][whitepaper]] documenting how we extended the original UOKMS
+paper mentioned above to make it work in a real world setup.

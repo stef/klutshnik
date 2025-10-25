@@ -1,0 +1,453 @@
+#+TITLE: Servers - Klutshnik Key-Management System
+#+AUTHOR: klutshnik
+#+OPTIONS:   H:4 num:t toc:nil \n:nil @:t ::t |:t ^:t -:t f:t *:t <:t
+#+OPTIONS:   TeX:t LaTeX:t skip:nil d:nil todo:t pri:nil tags:not-in-toc
+
+#+BEGIN_EXPORT html
+<img src="keeper7keys.jpg" style="float:right;position:absolute;right:10px;top:10px;" width="100em" />
+<ul >
+    <li style="display: inline;"><a href="/">Home</a></li>
+    <li style="display: inline;"><a href="client_install.html">Install Client</a></li>
+    <li style="display: inline;"><a href="servers.html">Find Servers</a></li>
+    <li style="display: inline;">Host Server</li>
+    <li style="display: inline;"><a href="device_install.html">Host Device</a></li>
+    <li style="display: inline;"><a href="docs.html">Docs</a></li>
+    <li style="display: inline;"><a href="code.html">Code</a></li>
+    <li style="display: inline;"><a href="faq.html">FAQ</a></li>
+</ul>
+<hr />
+#+END_EXPORT
+
+* Overview
+
+The Klutshnik server is also known as /klutshnikd/ it is a
+key-management server. The server is responsible for protecting the
+key shares, managing operations on them and related maintenance and
+admin functions.
+
+* Quick Install Recipes
+
+** On Devuan/Debian/Ubuntu/Kali/Raspbian/etc
+
+Currently not available in Debian or derivatives due to the lack of a
+zig compiler in debian.
+
+** On NixOS
+
+Currently not available.
+
+** On Raspberry Pis
+
+Klutshnik provides ready to use OS [[https://github.com/stef/klutshnik/releases/tag/v0.3.0][images for Raspberry Pi 3 and
+newer]]. These are based on the latest Alpine Linux release and come
+pre-configured with proper Seccomp BPF sandboxing.
+
+Writing the image can be done as follows:
+
+#+BEGIN_SRC sh
+gzip -dc output/sdcard.img.gz >sdcard.img
+sudo dd if=sdcard.img of=/dev/mmcblk0
+#+END_SRC
+
+*** First Boot
+
+The RPI image self-initializes at the first boot, this means it
+generates keys, self-signed certificates and a Seccomp BPF sandboxing
+ruleset.
+
+You can either connect via a serial port, or ssh into the raspi using
+root and ~klutshnik~ password, which you should change
+immediately. Furthermore You should either disable ssh (if you want
+only serial port access), or upload your ssh key to
+~/root/.ssh/authorized_keys~ and disable ssh passwords logins.
+
+In case you prefer proper TLS certificates the image has ~acme.sh~,
+~acme-tiny~ and ~certbot~ pre-installed.
+
+*** Configuration
+
+**** Client Setup
+
+Before using your new klutshnik raspi you need to add the device to
+your klutshnik client config. The following template needs to be
+completed and added to your ~klutshnik.cfg~ file ~[servers]~ section:
+
+#+BEGIN_EXAMPLE
+[servers.<devicename>]
+# address of server
+host="<ip address>"
+port=443
+# public key of the server
+ssl_cert = "cert.pem"
+ltsigkey="<public ltsigkey>"
+#+END_EXAMPLE
+
+In order:
+
+  1. choose a device name, this might be a host name, or any other
+     identifier you prefer.
+  2. the ip address of your device where this klutshnik server will be
+     available.
+  3. Unless you are using proper official Certificate Authority issued
+     TLS certs (if you do, omit the ~ssl_cert~ line), a file
+     containing the self-signed SSL certificate.
+  4. The long-term signing public key (ltsigkey) of the newly set up
+     klutshnik device.
+
+Both the self-signed SSL cert and the ltsigkey are presented to you
+when you login to the device via the serial console or ssh. You can
+also find the certificate in ~/etc/klutshnik/cert.pem~, and the
+ltsigkey at ~/etc/klutshnik/ltsig.key.pub~.
+
+**** authorized​_keys Setup
+
+In order to use the new device in a threshold setup with other
+klutshnik servers, the authorization key must be added to all other
+klutshnik servers ~authorized_keys~ files and the same file must also
+be installed at the new klutshnik raspi device, which is stored at
+~/etc/klutshnik/authorized_keys~.
+
+**** Tor Hidden Service Setup
+
+The image comes pre-installed with tor, and freshly configured at
+first boot. If you want to enable it, you must login as root, and run:
+
+#+BEGIN_SRC sh
+rc-update add tor default
+#+END_SRC
+
+If you want to start it immediately you should also run:
+
+#+BEGIN_SRC sh
+/etc/init.d/tor start
+#+END_SRC
+
+* Building from Source
+
+** Prerequisites
+
+- Install Zig v0.15.x. You can install from the package manager of your distro if it has Zig or from https://ziglang.org/download/.
+- Ensure that ~sodium.pc~ is in ~/usr/share/pkgconfig/~ . This is done because Zig does not seem to be able to find other distro-specific directories like ~/usr/lib/x86_64-linux-gnu/pkgconfig/~
+
+*** Clone the Repository
+
+#+BEGIN_SRC sh
+git clone --recursive https://github.com/stef/klutshnik
+#+END_SRC
+
+*** Build
+
+#+BEGIN_SRC sh
+cd klutshnik/server
+zig build install -Doptimize=ReleaseSafe -Dpie=true -Drelro=true -Dsystem_libs=false --prefix .
+#+END_SRC
+
+For cross-compiling or generic CPUs, where you are building the
+server on a different CPU than what you are going deploy it on,
+you might want to add a ~-Dcpu=baseline~ parameter:
+
+#+BEGIN_SRC sh
+zig build -Dcpu=baseline -Doptimize=ReleaseSafe -Dpie=true -Drelro=true -Dsystem_libs=false install --prefix .
+#+END_SRC
+
+*** Allow Binding to Port 443 (Optional but Recommended)
+
+We recommend running a production server on port 443, which is
+where TLS-enabled web servers are usually running. Also, it is
+the most widely allowed port on firewalls. Using this port prevents
+issues like being locked out from your keys because a hotel's
+firewall does not allow you to connect to a more esoteric port like 2355.
+
+To avoid running the server as root, you can use the following command to allow
+the server to bind to port 443 without root privileges:
+
+#+BEGIN_SRC sh
+sudo setcap 'cap_net_bind_service=+ep' ./bin/klutshnikd
+#+END_SRC
+
+** Configuring the Server
+
+*** Get a proper TLS cert
+
+The server needs a TLSv1.2 certificate and the *only* supported algorithm
+for the key is Elliptic Curve Digital Signature Algorithm (ECDSA).
+To generate a key, run:
+
+#+BEGIN_SRC sh
+openssl ecparam -genkey -out ssl_key.pem -name secp384r1
+#+END_SRC
+
+You also need to create a TLS certificate for this key.
+
+*Option A: Production Certificate (Recommended)*
+
+For production deployments, you can obtain a certificate from [[https://letsencrypt.org/][Let's Encrypt]]
+using your preferred ACME client (certbot, acme.sh, etc.).
+
+*Option B: Self-Signed Certificate (Testing Only)*
+
+⚠️ *Warning: Only use self-signed certificates for testing and development.*
+
+#+BEGIN_SRC sh
+openssl req -new -nodes -x509 -sha256 -key ssl_key.pem -out ssl_cert.pem -days 365 -subj '/CN=your-hostname'
+#+END_SRC
+
+Replace ~your-hostname~ with your server's actual hostname or IP address.
+
+For self-signed certificates, you must:
+  - Copy ~ssl_cert.pem~ to each client machine
+  - Set the ~ssl_cert~ variable in client config to point to this file
+
+*** Configuration
+
+**** Configuration File Locations
+
+First you need a configuration for your server.
+Klutshnik reads configuration files in this specific order, with later
+files overriding earlier settings:
+
+1. ~/etc/klutshnikd/config~ - System-wide configuration
+2. ~~/.klutshnikdrc~ - User-specific configuration
+3. ~~/.config/klutshnikd/config~ - XDG-compliant user configuration
+4. ~./klutshnikd.cfg~ - Project or directory-specific configuration
+
+This hierarchy allows global defaults while letting users customize
+their personal settings.
+
+**** Basic Configuration Template
+
+The content of the configuration files should be according to the following
+example (showing all default values):
+
+#+BEGIN_EXAMPLE
+[server]
+address="::"
+port=2355
+ssl_key="/pathto/key.pem"
+ssl_cert="/pathto/cert.pem"
+timeout=3
+max_kids=5
+datadir= "/var/lib/klutshnik"
+verbose=false
+ltsigkey="/pathto/ltsig.key"
+record_salt = "some natrium-chloride"
+authorized_keys="/pathto/authorized_keys"
+#+END_EXAMPLE
+
+**** Configuration Parameter Guide
+- *~address~*: Determines on what address your server is listening. Set to ~"::"~ to listen on all IPv4 and IPv6 interfaces, or specific IP for restricted access
+- *~port~*: Sets the port your server is listening on. We recommend using port 443 if available, since it is usually used for web servers and would help when the server is being accessed from behind tight firewalls
+- *~ssl_key~* & *~ssl_cert~*: Required. Have no defaults, and must be set to paths to your TLS credentials. Without them, the server will not run
+- *~timeout~*: Sets the TCP connection timeout. Increase for slow networks, with the caveat that this might lead to easier resource exhaustion, by blocking all workers
+- *~max_kids~*: Configures the number of worker processes serving requests.
+- *~datadir~*: Points at the root directory where all data is stored. Backup this directory regularly and securely, since the loss of this directory means users lose access to their keys (or at least shares of them)
+- *~verbose~*: Makes the server print information to standard output. This can be helpful for debugging
+- *~ltsigkey~*: The path pointing to the long-term signing private key. You can create one by running ~server init~. This will also create a public key and its base64 encoded variant, which should be published to all potential users so that they can use your server in a threshold setup. If running a public server, establish an online presence (static webpage, social media, etc.) to publish your public key
+- *~record_salt~*: A random string that makes the ids unique from other KMS servers, providing weak unlinkability between client IDs and local IDs.
+- *~authorized_keys~*: a path to a file, which stores the keypairs of all other clients and KMSs that are allowed to access this server.
+
+The server supports overriding any of these config variables by
+setting environment variables. The name of the environment variable is
+the all-capital variant of the name, prefixed by ~KLUTSHNIK_~. For
+example, you can set the verbosity of the server, controlled with the
+~verbose~ parameter using ~KLUTSHNIK_VERBOSE~ like this:
+
+#+BEGIN_EXAMPLE
+KLUTSHNIK_VERBOSE=true klutshnikd
+#+END_EXAMPLE
+
+** Running the Server
+
+Once you have configured your TLS certificates and server settings,
+you can start your klutshnik server.
+
+#+BEGIN_SRC sh
+./bin/klutshnikd 2>&1 | /usr/bin/ts
+#+END_SRC
+
+The command pipes both standard output and error streams through
+~/usr/bin/ts~, a utility from the moreutils package that adds
+timestamps to each log line. This basic logging setup helps
+with debugging and monitoring, though you may want to implement
+a more sophisticated logging solution for production environments.
+
+** Sandboxing klutshnikd
+
+klutshnik includes a simple script for sandboxing the server
+with further sandboxing using seccomp (secure computing mode), a Linux
+kernel feature that restricts the system calls (syscalls) a process
+can make. This script creates an isolated environment that limits
+the server's access to system resources, reducing the potential
+impact of security vulnerabilities.
+
+To run the ~klutshnikd~ in a sandboxed environment:
+
+#+BEGIN_SRC sh
+./sbox.sh bin/klutshnikd klutshnikd.cfg seccomp/debian-sid-zig-0.15.1.bpf 2>&1 | /usr/bin/ts
+#+END_SRC
+
+*** Important Sandboxing Considerations
+
+The sandboxed environment has several limitations you should be
+aware of:
+- Your configuration file format becomes more strict in the sandboxed environment. The config file **MUST NOT** contain spaces around the equals signs (=), as the sandbox script sources the file directly and spaces will cause parsing failures.
+- During the configuration loading process, you may see one harmless error or warning message about the `[server]` section header, which can be safely ignored.
+
+*** Creating Custom Seccomp Profiles
+
+If the [[https://github.com/stef/klutshnik/tree/master/server/seccomp][provided ~.bpf~ seccomp profiles]] don't work for your system
+architecture or distribution, you can create your own.
+The simplest approach is to start with an existing profile
+like ~x86_64-musl.seccomp~ or ~debian-sid-zig-0.15.1.seccomp~ and compile it.
+These profiles are located in the [[https://github.com/stef/klutshnik/tree/master/server/seccomp][~server/seccomp~ directory of the repository.]]:
+
+#+BEGIN_SRC sh
+tools/compile_seccomp_policy.py target.seccomp target.bpf
+#+END_SRC
+
+Test your new profile using the sandbox script, ~sbox.sh~, while
+monitoring system messages with ~dmesg~. If the kernel blocks a
+syscall, dmesg will report which syscall caused the violation.
+Add the missing syscall to your .seccomp file, recompile, and
+test again until the server runs without violations.
+
+For a completely custom profile, you can generate one for
+your architecture and libc automatically by running:
+
+#+BEGIN_SRC sh
+cd server/seccomp
+make
+#+END_SRC
+
+If all goes well, you should have a file called ~target.bpf~ which is
+the BPF rules for your build. If not, you can try manually by
+following the steps in the next sections.
+
+**** Generate constants.json
+For the server, you can use the ~constants.json~ file from the
+~server/seccomp~ directory. If you prefer, you can generate a new one
+by following the instructions below:
+
+#+BEGIN_SRC sh
+git clone https://android.googlesource.com/platform/external/minijail/ /tmp/minijail
+cd /tmp/minijail
+make constants.json
+cd -
+cp /tmp/minijail/constants.json .
+#+END_SRC
+
+**** Generate a comprehensive strace log
+
+You need to start one ~klutshnikd~ while stracing it without a
+sandbox/jail, and run the full unit test suite (present in the
+~/tests~ folder) against the server. Alternatively, you could just run
+~tests/test.sh~, but that is less comprehensive and mostly tests the
+positive branches
+
+To create a comprehensive trace of the server's system calls while
+running the full test suite:
+
+#+BEGIN_SRC sh
+strace -fo target.strace bin/klutshnikd
+#+END_SRC
+
+**** Extract a seccomp configuration from the strace log
+Run this script to generate a list of all system calls from your trace
+log to create a new seccomp policy:
+
+#+BEGIN_SRC sh
+minijail/tools/generate_seccomp_policy.py target.strace >target.seccomp
+#+END_SRC
+
+**** Compile seccomp into bpf
+
+Finally, compile the ~.seccomp~ file into a proper ~.bpf~
+
+#+BEGIN_SRC sh
+minijail/tools/compile_seccomp_policy.py target.seccomp target.bpf
+#+END_SRC
+
+This process ensures your seccomp profile includes the system calls
+your server needs while blocking everything else. This custom config
+can now be used with the above-mentioned ~sbox.sh~ script.
+
+** Running in Production
+
+Normally you want to run the klutshnik server on a dedicated machine,
+with nothing else (except maybe an ssh), to minimize your attack
+surface.
+
+However... sometimes you don't have this luxury of minimized attack
+surface, and you want to run klutshnik on a server with other
+(probably) HTTPS services.
+
+You (might/should) also want to run a separate webserver for public
+announcements related to your server, like public keys, sample configs
+and updates and news. Our recommendation is to run the klutshnik server
+on ~kms.yourdomain.tld~ and the related webserver on
+~klutshnik.yourdomain.tld~.
+
+You might be tempted to run nginx as a reverse proxy in front of
+klutshnik. **DON'T**. Klutshnik as a protocol cannot be TLS terminated
+upstream. Also if you look into plaintext klutshnik traffic you will
+see it is all binary. You will have only lot's of ~HTTP/1.1 400 Bad
+Request~ and unhappy users.
+
+What you can do in these cases is to run a SNI-based routing proxy,
+like [[https://github.com/stef/snifer][snifer]] or HAPROXY. This also allows you to run a dedicated
+website for your klutshnik server, so that you can inform your users
+about the configuration, keys and maintenance related updates and
+news. The following is an example HAPROXY config:
+
+#+BEGIN_SRC
+defaults
+  timeout client 30s
+  timeout server 30s
+  timeout connect 5s
+
+# HAPROXY listens here
+frontend ft_ssl_vip
+  bind 10.0.0.10:443
+  mode tcp
+
+  tcp-request inspect-delay 5s
+  tcp-request content accept if { req_ssl_hello_type 1 }
+
+  default_backend bk_ssl_default
+
+# Using SNI to take routing decision
+backend bk_ssl_default
+  mode tcp
+
+  acl klutshnik req_ssl_sni -i klutshnik.domain.com
+
+  use-server klutshnik_server if klutshnik
+  use-server other if !klutshnik_server
+
+  option ssl-hello-chk
+  server klutshnik_server 127.0.0.1:2523 check
+  server other 127.0.0.1:443 check
+#+END_SRC
+
+In this setup you should adjust 10.0.0.10 to your public IP address
+where you want to run all your services. In the example above the
+klutshnik server runs on localhost:2523 and the other stuff on a
+webserver listening on localhost:443.
+
+In case you want your webserver to have access to IP addresses of
+connecting clients, you need transparent proxying which also involves
+some firewall configuration, an [[https://github.com/haproxy/haproxy/blob/master/examples/transparent_proxy.cfg][example]] is available in the HAPROXY
+repo.
+
+*** Running a Klutshnik hidden-service
+
+This is useful, so your users can be sure, they cannot be tracked by
+you based on IP addresses. It shows you mean business and respect
+them.
+
+#+BEGIN_SRC
+HiddenServiceDir /var/lib/tor/klutshnik/
+HiddenServicePort 443 127.0.0.1:4443
+#+END_SRC
+
+the hostname is in ~/var/lib/tor/klutshnik/hostname~.
