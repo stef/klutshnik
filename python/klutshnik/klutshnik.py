@@ -810,6 +810,8 @@ def usage(params, help=False):
   sys.exit(100)
 
 def getargs(config, cmd, params):
+   if cmd == init: return []
+
    if cmd == create:
       keyid = pysodium.crypto_generichash(params[0], k=config['id_salt'])
       t = config['threshold']
@@ -1011,7 +1013,7 @@ def main(params=sys.argv):
   m = None
   ltsigkey = None
   args = getargs(config, cmd, params[2:])
-  if cmd not in {encrypt, update, import_cfg, provision}:
+  if cmd not in {encrypt, update, import_cfg, provision, init}:
      m = args[0]
      ltsigkey = args[3]
 
