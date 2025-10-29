@@ -757,7 +757,9 @@ def provision(port, cfg_file, cfg, authkeys, uart, esp):
       name = f"ble_{mac.replace(':','')}"
    else:
       mac=None
-      name = f"usb-cdc0"
+      allowed = set("abcdefghijklmnopqrstuvwxyz0123456789_-")
+      tag = ''.join([c for c in uart.lower() if c in allowed])
+      name = f"usb_{tag}"
 
    table = None
    # check if there is already a record with this mac
