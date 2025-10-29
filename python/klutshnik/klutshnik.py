@@ -69,13 +69,13 @@ def processcfg(config):
   if len(servers)>1:
       if config['threshold'] < 2:
           print('if you have multiple servers in your config, you must specify a threshold, which must be: len(servers) > threshold > 1 also')
-          exit(1)
+          if len(sys.argv)>1 and sys.argv[1] not in {'init', 'provision'}: exit(1)
       if len(servers)<config['threshold']:
           print(f'threshold({config["threshold"]}) must be less than the number of servers({len(servers)}) in your config')
-          exit(1)
+          if len(sys.argv)>1 and sys.argv[1] not in {'init', 'provision'}: exit(1)
   elif config['threshold'] > 1:
       print(f'threshold({config["threshold"]}) must be less than the number of servers({len(servers)}) in your config')
-      exit(1)
+      if len(sys.argv)>1 and sys.argv[1] not in {'init', 'provision'}: exit(1)
   config['servers']=servers
 
   return config
