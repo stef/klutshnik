@@ -326,9 +326,7 @@ fn load_pubkeys(path: []const u8) !KeyStore {
 
 fn ssl_file_missing(path: []const u8) noreturn {
     warn("The SSL key at {s} is not a readable file. Make sure this is a proper ssl key.\n", .{path});
-    // todo
-    //warn("Our GettingStarted document gives simple example of how to do so.\n", .{});
-    //warn("Check out https://sphinx.pm/server_install.html .\n", .{});
+    warn("Check out https://klutshnik.info/server_install.html#:~:text=Get%20a%20proper%20TLS%20cert .\n", .{});
     warn("Aborting.\n", .{});
     posix.exit(1);
 }
