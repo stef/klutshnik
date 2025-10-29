@@ -724,7 +724,7 @@ def provision(port, cfg_file, cfg, authkeys, uart, esp):
       raise ValueError("unexpected initialization")
 
    print("waiting a bit for device to generate its own keys", file=sys.stderr)
-   time.sleep(0.4)
+   time.sleep(0.8)
    # todo maybe check if any of the init ops gave any negative results
    serialPort.reset_input_buffer()
    # collect info
