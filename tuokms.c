@@ -142,9 +142,9 @@ int klutshnik_stream_encrypt(const uint8_t yc[crypto_core_ristretto255_BYTES],
 
   // certified public value for client
   uint8_t w[crypto_core_ristretto255_BYTES];
-  crypto_scalarmult_ristretto255_base(w, r);
+  if(crypto_scalarmult_ristretto255_base(w, r)) return 1;
 
-  write(outfd, w, crypto_core_ristretto255_BYTES);
+  if(crypto_core_ristretto255_BYTES!=write(outfd, w, crypto_core_ristretto255_BYTES)) return 1;
 
   uint8_t tmp[crypto_core_ristretto255_BYTES];
   if(crypto_scalarmult_ristretto255(tmp, r, yc)) return 1;
