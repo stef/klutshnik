@@ -869,7 +869,10 @@ fn toprf_update(cfg: *const Config, s: *sslStream, req: *const UpdateReq) void {
         log("stp_ltpk != authorized pk\n", .{}, req.id[0..]);
         fail(s);
     }
-    // todo assert that pkid == req.id
+    if(!mem.eql(u8, pkid[0..],req.id[0..])) {
+        log("pk id != req id\n", .{}, req.id[0..]);
+        fail(s);
+    }
 
     var params: [2]u8 = undefined;
     loadx(cfg, req.id[0..], "params", &params) catch |err| {
