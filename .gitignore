@@ -18,3 +18,8 @@ man/*.1
 man/*.5
 test/otherclient/keystore
 man/*.html
+website/*.html
+website/ltximg
+website/manpages/
+test/servers/*/data
+keystore
