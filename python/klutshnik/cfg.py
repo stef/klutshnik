@@ -4,11 +4,8 @@
 
 import os, tomlkit
 
-def split_by_n(obj, n):
-  # src https://stackoverflow.com/questions/9475241/split-string-every-nth-character
-  return [obj[i:i+n] for i in range(0, len(obj), n)]
-
 def getcfg(name, cwd="."):
+  files = set()
   paths=[
       # read global cfg
       f'/etc/{name}/config',
@@ -23,7 +20,8 @@ def getcfg(name, cwd="."):
     try:
         with open(path, "rb") as f:
             data = tomlkit.load(f)
+        files.add(path)
     except FileNotFoundError:
         continue
     config.update(data)
-  return config
+  return config, files
