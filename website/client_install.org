@@ -212,7 +212,11 @@ After installing and configuring the Klutshnik client, on its first
 run, you need to initialize it:
 
 #+BEGIN_SRC sh
-klutshnik init
+klutshnik init <path-to-klutshnik.cfg>
 #+END_SRC
 
-This creates the ~keystore~ directory and a long-term signing key.
+This creates the ~keystore~ directory and a client master key, the this op
+outputs your long and short public keys. The long one must be added to any
+klutshnik servers ~authorized_keys~ files that you want to use. And this key is
+also needed if you want to be authorized to use klutshnik keys owned by other
+users.
