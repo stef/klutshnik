@@ -47,21 +47,25 @@ considered fresh. anything older than this is considered invalid and
 aborts a DKG. Higher values help with laggy links, lower values can
 be fine if you have high-speed connections to all servers. Default: 1200s
 
-### LTSIGKEY_PATH
+### CLIENTKEY_PATH
 
-This variable is a path pointing at a file containing a private
-long-term signing key of the client. If this value is not set, it is
+This variable is a path pointing at a file containing a secret
+master key of the client. If this value is not set, it is
 expected on standard input for all operations that require this key.
 
 Leaving this value commented out allows to pipe in the private key
 from password managers, or other more secure storage than the
 filesystem.
 
+If this path is set, but the file does not exist `klutshnik init` will
+initialize this file.
+
 ### LTSIGPUB
 
 This variable must be set to the public long-term signing key of the
 client, this public key must be base64 encoded and this encoded value
-prefixed by the string "KLTPK-".
+prefixed by the string "KLTPK-". The operation `klutshnik init`
+initialized this value.
 
 ### DEBUG
 

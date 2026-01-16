@@ -4,7 +4,7 @@ klutshnik - command-line client for an updatable threshold KMS system
 
 # SYNOPSIS
 
-     klutshnik init
+     klutshnik init <configfile>
 
      klutshnik create  <keyname> [<ltsigkey] >pk
 
@@ -94,21 +94,20 @@ that people can guess your record ids.
 ### Initialize a new config
 
 ```sh
-% klutshnik init
+% klutshnik init <configfile>
 ```
 
-This checks if the `ltsigkey_path` variable is pointing at a non-existing
-file. If this is the case, then the client generates a new long-term
-signing-key, saves it at the pointed location and prints the public
-key on standard output. This public key value must be manually added
-to the config file setting the value for `ltsigpub` in the `[client]`
-section.
+This checks if the `clientkey_path` variable is pointing at a non-existing
+file. If this is the case, then the client generates a new client
+master key, saves it at the pointed location and prints your long and short
+public key on standard output. This long public key value must be manually added
+to any klutshnik server `authorized_keys` files that you want to use.
 
-Furthermore this also checks if the directory pointed at by the
+Furthermore the `init` op also checks if the directory pointed at by the
 `keystore` value in the `[client]` section exists and if not creates
 this.
 
-Note it is recommended to store your private `ltsigkey` in a more
+Note it is recommended to store your client master key in a more
 secure location than your disk, if possible store it in a password
 manager, like `pwdsphinx(1)`, see `klutshnik.cfg(5)` for more details.
 
