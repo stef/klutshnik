@@ -742,26 +742,16 @@ def provision(ltsigkey, port, cfg_file, cfg, authkeys, uart, esp):
       line = serialPort.readline().decode("Ascii").strip()
       if debug: print(line)
       if 'no configuration found. waiting for client initialization' in line:
-         print("device is unintialized. sending client config", file=sys.stderr)
-         serialPort.reset_input_buffer()
-         ltsigpub = cfg['client']['ltsigpub'][8:]
-         serialPort.write(f'init ltsig {ltsigpub}\n'.encode('utf8'))
-         time.sleep(0.1)
-         noise_sk = pysodium.randombytes(32)
-         noise_pk = pyoprf.noisexk.pubkey(noise_sk)
-         serialPort.write(f'init noise {b2a_base64(noise_pk).decode('utf8').strip()}\n'.encode('utf8'))
-         time.sleep(0.1)
-         for ak in authkeys:
-            if ak.strip() == '': continue
-            serialPort.write(f"authkey add {ak}\n".encode('utf8'))
-            time.sleep(0.1)
          break
    else:
       raise ValueError("unexpected initialization")
 
-   print("waiting a bit for device to generate its own keys", file=sys.stderr)
-   time.sleep(0.8)
    # todo maybe check if any of the init ops gave any negative results
+   print("device is unintialized. initializing device.", file=sys.stderr)
+   serialPort.reset_input_buffer()
+   serialPort.write(f'init\n'.encode('utf8'))
+   time.sleep(0.1)
+
    serialPort.reset_input_buffer()
    # collect info
    serialPort.write(b'getcfg noisepk\n')
@@ -769,6 +759,7 @@ def provision(ltsigkey, port, cfg_file, cfg, authkeys, uart, esp):
    _ = serialPort.readline().decode("Ascii").strip()
    line = serialPort.readline().decode("Ascii").strip()
    npk=a2b_base64(line.split()[-1])
+   if(len(npk)!=32): raise ValueError(f"Device noise pubkey has incorrect length: {len(npk)}")
 
    serialPort.reset_input_buffer()
    serialPort.write(b'getcfg ltsigpk\n')
@@ -776,6 +767,24 @@ def provision(ltsigkey, port, cfg_file, cfg, authkeys, uart, esp):
    _ = serialPort.readline().decode("Ascii").strip()
    line = serialPort.readline().decode("Ascii").strip()
    spk=a2b_base64(line.split()[-1])
+   if(len(spk)!=32): raise ValueError(f"Device signing pubkey has incorrect length: {len(spk)}")
+
+   print("sending client config", file=sys.stderr)
+   serialPort.reset_input_buffer()
+   ltsigpub = cfg['client']['ltsigpub'][8:]
+   serialPort.write(f'init ltsig {ltsigpub}\n'.encode('utf8'))
+   time.sleep(0.1)
+
+   noise_sk = getnoisekey()
+   noise_pk = pyoprf.noisexk.pubkey(noise_sk)
+   serialPort.write(f'init noise {b2a_base64(noise_pk).decode('utf8').strip()}\n'.encode('utf8'))
+   time.sleep(0.1)
+   for ak in authkeys:
+      if ak.strip() == '': continue
+      serialPort.write(f"authkey add {ak}\n".encode('utf8'))
+      time.sleep(0.1)
+
+   time.sleep(0.4)
 
    if not uart:
       serialPort.reset_input_buffer()
@@ -788,7 +797,7 @@ def provision(ltsigkey, port, cfg_file, cfg, authkeys, uart, esp):
       elif line.startswith('MAC address: '):
          mac=line.split()[-2]
       else:
-         print(line,file=sys.stderr)
+         print("unexpected response from device", line,file=sys.stderr)
          raise ValueError("failed to retrieve mac address from device")
       name = f"ble_{mac.replace(':','')}"
    else:
