@@ -8,7 +8,7 @@ from tempfile import NamedTemporaryFile
 import pysodium, pyoprf
 from klutshnik.cfg import getcfg
 from SecureString import clearmem
-from pyoprf.multiplexer import Multiplexer
+from pyoprf.multiplexer import Multiplexer, BLEPeer, USBPeer
 from binascii import a2b_base64, b2a_base64, unhexlify
 from itertools import zip_longest
 
@@ -38,6 +38,10 @@ perms = {
 'UPDATE' : 4,
 'DELETE' : 8,
 }
+
+LISTUSER = b'\x00'
+ADDUSER =  b'\xf0'
+DELUSER =  b'\xff'
 
 perm_str = { 0: 'none', 1: 'owner', 2: 'decrypt', 3: 'owner,decrypt', 4: 'update', 5: 'owner,update', 6: 'decrypt,update',
              7: 'owner,decrypt,update', 8: 'delete', 9: 'owner,delete', 10: 'decrypt,delete', 11: 'owner,decrypt,delete',
@@ -583,7 +587,7 @@ def auth(m, op, keyid, reqbuf, sk):
 
 def deluser(m, keyid, ltsigpub, ltsigkey, pubkey):
   pubkey = a2b_base64(pubkey)
-  opcode = b'\x00'
+  opcode = DELUSER
 
   m.broadcast(MODAUTH+VERSION+keyid+opcode)
 
@@ -608,7 +612,7 @@ def deluser(m, keyid, ltsigpub, ltsigkey, pubkey):
     raise ValueError("invalid signature on authblob")
 
   items = {bytes(e[:32]): e[32]&0xf for e in split_by_n(data, pysodium.crypto_sign_PUBLICKEYBYTES+1)}
-  del items[pubkey]
+  del items[pubkey[:32]]
 
   auth2 = b''.join(k+bytes([p]) for k,p in items.items())
 
@@ -620,8 +624,17 @@ def deluser(m, keyid, ltsigpub, ltsigkey, pubkey):
 
 def adduser(m, keyid, ltsigpub, ltsigkey, userpub, perm, t, servers):
   pubkey = a2b_base64(userpub)
-  m.broadcast(MODAUTH+VERSION+keyid+b'\x00')
-  auth(m, MODAUTH, keyid, b'\x00', ltsigkey)
+  opcode = ADDUSER
+
+  noise_peers = [i for i, p in enumerate(m) if type(p) in {BLEPeer, USBPeer}]
+  if noise_peers:
+     if len(pubkey)!=64:
+        raise ValueError("Some of the peers are BLE/USB based, must provide full authkey not only short pubkey")
+     noisekey=pubkey[32:]
+     pubkey=pubkey[:32]
+
+  m.broadcast(MODAUTH+VERSION+keyid+opcode)
+  auth(m, MODAUTH, keyid, opcode, ltsigkey)
 
   sizes = tuple(struct.unpack(">H", p)[0] for p in m.gather(2) if p is not None)
   if len(sizes) != len(m): raise ValueError("failed to receive auth blob sizes")
@@ -654,12 +667,15 @@ def adduser(m, keyid, ltsigpub, ltsigkey, userpub, perm, t, servers):
   for i in range(len(m)):
     send_pkt(m, msg, i)
 
+  for i in noise_peers:
+     send_pkt(m, noisekey, i)
+
   # serialize:
   # keyid, t, config['servers']
   return json.dumps({'n': len(m), 't': t, 'keyid': b2a_base64(keyid).decode('utf8').strip(), 'servers': servers})
 
 def listusers(m, keyid, ltsigpub, ltsigkey):
-  opcode = b'\x01'
+  opcode = LISTUSER
   m.broadcast(MODAUTH+VERSION+keyid+opcode)
 
   auth(m, MODAUTH, keyid, opcode, ltsigkey)
@@ -1012,7 +1028,7 @@ def process_result(cmd, ret):
    elif cmd == adduser:
       b64 = b2a_base64(lzma.compress(ret.encode('utf8'))).decode('utf8').strip()
       if config.get('verbose'):
-         print('the newly authorized client must run:\nklutshnik import "some-keyname" ', end='', file=sys.stderr)
+         print('the newly authorized client must run:\nklutshnik import "some-keyname" ', file=sys.stderr)
       print(f"KLTCFG-{b64}")
    elif cmd == refresh:
       save, keyid, pki, pkis, t, epoch = ret
@@ -1092,7 +1108,7 @@ def main(params=sys.argv):
     print(error, file=sys.stderr)
     sys.exit(1) # generic errors
 
-  if cmd in {create, rotate, refresh} or params[1]=="adduser":
+  if cmd in {create, rotate, refresh, adduser}:
     process_result(cmd, ret)
   elif ret != True:
     print("reached code that should not be reachable: ", ret)
