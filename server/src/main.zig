@@ -69,6 +69,13 @@ const KlutshnikOp = enum(u8) {
     _,
 };
 
+const UserOp = enum(u8) {
+    LIST  =   0,
+    ADD  =    0xf0,
+    DELETE  = 0xff,
+    _,
+};
+
 const KlutshnikPerms = enum(u8) {
     OWNER   = 1,
     DECRYPT = 2,
@@ -119,7 +126,7 @@ const RefreshReq = extern struct {
 const ModAuthReq = extern struct {
     version: u8 align(1),
     id: [sodium.crypto_generichash_BYTES]u8 align(1),
-    readonly: u8 align(1),
+    op: UserOp align(1),
 };
 
 const Pubkeys = struct {
@@ -1373,7 +1380,7 @@ fn modauth(cfg: *const Config, s: *sslStream, req: *const ModAuthReq) void {
     };
     send_pkt(s, authbuf);
 
-    if(req.readonly == 1) {
+    if(req.op == UserOp.LIST) {
         log("list auth success by {x}\n", .{&pk.toBytes()}, &req.id);
         return;
     }
