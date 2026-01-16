@@ -110,6 +110,25 @@ Most of the functionality in klutshnik requires the client interacting
 with the KMS's. This section describes the protocol between these two
 actors.
 
+*** Client and Server keys
+
+Clients and servers each have a long-term signing key, and a noise key for
+establishing secure connections to each other.
+
+Client to server connections are either protected by NoiseXK channels if the
+server is running on a klutshnik BLE or USB device, or using traditional TLS
+keys when the server is accessed using TCP/IP.
+
+The clients noise and long-term signing key are derived from the client master
+key:
+
+#+BEGIN_SRC
+ltsig_key = hkdf_sha512_expand(32, mk, "klutshnik client long-term signature key")
+noise_sk =  hkdf_sha512_expand(32, mk, "klutshnik client noise sk")
+#+END_SRC
+
+The ltsig_key is a traditional ed25519 key, and the noise key is an x25519 key.
+
 *** KeyIds
 
 Clients refer to keys using ~key names~; arbitrary strings, internally
