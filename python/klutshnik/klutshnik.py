@@ -432,7 +432,7 @@ def decrypt(m, keyid, ltsigpub, ltsigkey, t, epoch, pubkey, pkis):
   auth(m, DECRYPT, keyid, msg+ltsigpub, ltsigkey)
 
   # receive responses from tuokms_evaluate
-  resps = tuple((pkt[:33], pkt[33:]) for pkt in m.gather(33*2) if pkt is not None)
+  resps = tuple((pkt[:33], pkt[33:]) for pkt in m.gather(33*2,t) if pkt is not None)
   if len(resps) < t:
     raise ValueError("not enough responses received for decrypting")
   xresps = tuple(v[0] for v in resps)
