@@ -824,12 +824,14 @@ def provision(ltsigkey, port, cfg_file, cfg, authkeys, uart, esp):
        tname = tmpfile.name
        tomlkit.dump(cfg, tmpfile)
    os.replace(tname, cfg_file);
+   # todo append the authkey line to the authkey file passed as param
    print(f'please add {b2a_base64(spk+npk).decode().strip()} to all other klutshnikd servers authorized_keys files you intend to use in a group')
    return True
 
 def usage(params, help=False):
   name = os.path.basename(params[0])
   print("usage:")
+  print("     %s init <cfg-file>" % name)
   print("     %s create  <keyid> [<ltsigkey] >pubkey" % name)
   print("     %s encrypt <pubkey> <plaintext >ciphertext" % name)
   print("     %s decrypt [<ltsigkey] <ciphertext >plaintext" % name)
@@ -846,8 +848,13 @@ def usage(params, help=False):
   if help: sys.exit(0)
   sys.exit(100)
 
-def getargs(config, cmd, params):
-   if cmd == init: return []
+def getargs(config, cmd, params, cfgfiles):
+   if cmd == init:
+      cfgfile = os.path.expanduser(params[0])
+      if not cfgfile in cfgfiles:
+         raise ValueError(f"the file ({cfgfile}) provided as a config file must exist,\n"
+                          f"be read/writable and be the source of (some) of the configuration:\n\t{cfgfiles}")
+      return [cfgfile]
 
    if cmd == create:
       keyid = pysodium.crypto_generichash(params[0], k=config['id_salt'])
@@ -1011,7 +1018,7 @@ def process_result(cmd, ret):
 
 #### main ####
 
-cmds = {'init'     : {'cmd': init,      'params': 2},
+cmds = {'init'     : {'cmd': init,      'params': 3},
         'create'   : {'cmd': create,    'params': 3},
         'rotate'   : {'cmd': rotate,    'params': 3},
         'encrypt'  : {'cmd': encrypt,   'params': 3},
@@ -1035,7 +1042,8 @@ def main(params=sys.argv):
     usage(params)
 
   global config
-  config = processcfg(getcfg('klutshnik'))
+  c, cfg_files = getcfg('klutshnik')
+  config = processcfg(c)
 
   #if debug:
   #  import ctypes
@@ -1051,7 +1059,7 @@ def main(params=sys.argv):
 
   m = None
   ltsigkey = None
-  args = getargs(config, cmd, params[2:])
+  args = getargs(config, cmd, params[2:], cfg_files)
   if cmd not in {encrypt, update, import_cfg, provision, init}:
      m = args[0]
      ltsigkey = args[3]
