@@ -632,6 +632,8 @@ def adduser(m, keyid, ltsigpub, ltsigkey, userpub, perm, t, servers):
         raise ValueError("Some of the peers are BLE/USB based, must provide full authkey not only short pubkey")
      noisekey=pubkey[32:]
      pubkey=pubkey[:32]
+  elif len(pubkey)==64:
+     pubkey=pubkey[:32]
 
   m.broadcast(MODAUTH+VERSION+keyid+opcode)
   auth(m, MODAUTH, keyid, opcode, ltsigkey)
