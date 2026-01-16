@@ -32,7 +32,6 @@ DECRYPT =b'\x66'
 DELETE  =b'\xff'
 MODAUTH =b'\xaa'
 
-
 perms = {
 'OWNER'  : 1,
 'DECRYPT': 2,
@@ -45,8 +44,7 @@ perm_str = { 0: 'none', 1: 'owner', 2: 'decrypt', 3: 'owner,decrypt', 4: 'update
              12: 'update,delete', 13: 'owner,update,delete', 14: 'decrypt,update,delete', 15: 'owner,decrypt,update,delete'}
 
 config = None
-
-# TODO/FIXME client_sk is now in klutshnik.cfg and in keystore/*/data without much protection.
+masterkey = None
 
 #### Helper fns ####
 
@@ -165,7 +163,7 @@ def connect_servers(setup):
       os.remove(p)
    return m
 
-def loadmeta(keyid):
+def loadmeta(keyid, ltsigkey):
   if not os.path.exists(f"{config['keystore']}/{keyid.hex()}"):
      raise ValueError(f"unknown keyid: {keyid.hex()}")
   try:
@@ -184,40 +182,51 @@ def loadmeta(keyid):
     for s in servers.keys():
        servers[s]=dict(servers[s])
        if 'bleaddr' in servers[s] or 'usb_serial' in servers[s]:
-          servers[s]['client_sk']=a2b_base64(servers[s]['client_sk'])
           servers[s]['device_pk']=a2b_base64(servers[s]['device_pk'])
+          servers[s]['client_sk']=getnoisekey()
+          #print("csk", servers[s]['client_sk'].hex(), file=sys.stderr)
     m = connect_servers(servers)
   except FileNotFoundError:
     raise ValueError("unknown keyid")
 
   return m, keyid, pki, epoch, threshold, pkis
 
-def getltsigkey():
-   if 'ltsigkey' not in config:
-      if 'ltsigkey_path' in config:
-        with open(config['ltsigkey_path'],'rb') as fd:
-          sk = fd.read()
-      else:
-         if config.get('verbose') == True:
-            print("reading lt sigkey from stdin", file=sys.stderr)
-         prefix = os.read(0, 6)
-         if not prefix == b"kltsk-": raise ValueError(f"invalid long-term sig key on stdin: {repr(prefix)}")
-         sk = a2b_base64(os.read(0, 88))
-      if len(sk)!=64: raise ValueError("invalid long-term sig key on stdin")
+def getclientkey():
+   global masterkey
+   if masterkey is not None: return masterkey
+
+   if 'clientkey_path' in config:
+     with open(config['clientkey_path'],'rb') as fd:
+       sk = fd.read()
    else:
+      if config.get('verbose') == True:
+         print("reading client key from stdin", file=sys.stderr)
+      prefix = os.read(0, 6)
+      if not prefix == b"kltsk-": raise ValueError(f"invalid client key on stdin: {repr(prefix)}")
       sk = a2b_base64(os.read(0, 88))
+   if len(sk)!=64: raise ValueError("invalid client key on stdin")
+   masterkey = sk
    return sk
+
+def getltsigkey():
+  mk = getclientkey()
+  seed = pysodium.crypto_kdf_hkdf_sha512_expand(32, mk, "klutshnik client long-term signature key")
+  _, sk = pysodium.crypto_sign_seed_keypair(seed)
+  clearmem(seed)
+  return sk
+
+def getnoisekey():
+  mk = getclientkey()
+  return pysodium.crypto_kdf_hkdf_sha512_expand(32, mk, "klutshnik client noise sk")
 
 def get_servers(keyid = None):
    servers = {}
    for name, s in config['servers'].items():
       if 'bleaddr' in s:
          x={'bleaddr': s['bleaddr'],
-            'client_sk': s['client_sk'],
             'device_pk': s['device_pk']}
       elif 'usb_serial' in s:
          x={'usb_serial': s['usb_serial'],
-            'client_sk': s['client_sk'],
             'device_pk': s['device_pk']}
       else:
          x = {'host': s['host'],
@@ -235,40 +244,68 @@ def get_servers(keyid = None):
 
 #### OPs ####
 
-def init():
+def init(cfgfile):
    if not os.path.exists(config['keystore']):
       os.makedirs(config['keystore'], mode=0o700)
       print(f"Created missing directory for keystore at '{config['keystore']}'.", file=sys.stderr)
 
-   if 'ltsigkey_path' not in config:
-      print(f"The `ltsigkey` configuration value is not set\n."
+   if 'clientkey_path' not in config:
+      # todo instead of aborting try to read it from stdin, use that
+      # or if stdin does not have any, just generate it and output it to stdout among loud warnings
+      print(f"The `clientkey_path` configuration value is not set\n."
             f"Please uncomment the line and use the default or some prefered path to store this private key.\n"
             f"aborting.",
             file=sys.stderr)
       return False
-   if os.path.exists(config['ltsigkey_path']):
-      print(f"{config['ltsigkey_path']} exists, refusing to overwrite.\n"
+   if os.path.exists(config['clientkey_path']):
+      print(f"{config['clientkey_path']} exists, refusing to overwrite.\n"
             f"if you want to generate a new one, delete the old one first.\n"
             f"aborting",
             file=sys.stderr)
       return False
-   pk, sk = pysodium.crypto_sign_keypair()
 
-   with open(config['ltsigkey_path'], 'wb') as fd:
-     fd.write(sk)
+   global masterkey
+   masterkey = pysodium.randombytes(64)
 
-   print(f"Succsessfully generated long-term signing key pair.\n"
-         f"Stored the private key at '{config['ltsigkey_path']}'.\n"
-         f"Make sure you keep this key secure and have a backup.\n"
-         f"Your public key is:\n",
-         end="\n\t",
+   with open(config['clientkey_path'], 'wb') as fd:
+     fd.write(masterkey)
+
+   print(f"Succsessfully generated and stored client key at.\n"
+         f"\t'{config['clientkey_path']}'\n"
+         f"\x1b[0;31mMake sure you keep this key secure and have a backup\x1b[0m.\n"
+         ,file=sys.stderr)
+
+   ltsig_sk = getltsigkey()
+   ltsig_pk = pysodium.crypto_sign_sk_to_pk(ltsig_sk)
+   clearmem(ltsig_sk)
+   noise_sk = getnoisekey()
+   noise_pk = pyoprf.noisexk.pubkey(noise_sk)
+   clearmem(noise_sk)
+
+   with open(cfgfile, "rb") as f:
+      doc = tomlkit.load(f)
+   doc['client']['ltsigpub']=f"LTSIGPK-{b2a_base64(ltsig_pk).decode('utf8').strip()}"
+   doc['client']['noisepub']=f"NOISEPK-{b2a_base64(noise_pk).decode('utf8').strip()}"
+   with NamedTemporaryFile(mode="w+", dir=os.path.dirname(cfgfile), delete=False, delete_on_close=False) as tmpfile:
+       tname = tmpfile.name
+       tomlkit.dump(doc, tmpfile)
+   os.replace(tname, cfgfile);
+
+   print(f"Your long client pubkey is the following:\n  \x1b[0;32m", end='', file=sys.stderr)
+   print(f"KLTFCPK-{b2a_base64(ltsig_pk+noise_pk).decode('utf8').strip()}", end='', flush=True)
+   print("\x1b[0m", end='', file=sys.stderr)
+   print()
+   print(f"Ask the admins of the KMS servers you have configured\n"
+         f"to add this to their authorized_keys file without the KLTFCPK- prefix.\n"
+         f"This key is also necessary if someone wants to authorize you to use their key\n"
+         f"who uses USB or Bluetooth Klutshnik devices.\n",
          file=sys.stderr)
-   # todo since we use tomlkit we can actually write this value back.
-   print(f"LTSIGPK-{b2a_base64(pk).decode('utf8').strip()}", flush=True)
-   print(f"\nplease add it to your configuration 'ltsigpub' variable\n"
-         f"and ask the admins of the KMS servers you have configured\n"
-         f"to add this to their authorized_keys file",
-         file=sys.stderr)
+   print(f"Your short client pubkey is the following::\n  \x1b[0;32m", end='', file=sys.stderr)
+   print(f"KLTFSPK-{b2a_base64(ltsig_pk).decode('utf8').strip()}", end='', flush=True)
+   print("\x1b[0m", end='', file=sys.stderr)
+   print()
+   print(f"This is sufficient if someone wants to authorize you to use their key,\n"
+         f"but doesn't use USB or Bluetooth Klutshnik devices", file=sys.stderr)
    return True
 
 def create(m, keyid, ltsigpub, ltsigkey, t, ts_epsilon, sig_pks):
@@ -638,12 +675,11 @@ def listusers(m, keyid, ltsigpub, ltsigkey):
 
   authblob = tuple(set(authblobs))[0]
 
-  pk = a2b_base64(config['ltsigpub'][8:])
   sig = authblob[:pysodium.crypto_sign_BYTES]
   data = authblob[pysodium.crypto_sign_BYTES:]
 
   try:
-    pysodium.crypto_sign_verify_detached(sig, data, pk)
+    pysodium.crypto_sign_verify_detached(sig, data, ltsigpub)
   except:
     raise ValueError("invalid signature on authblob")
 
@@ -665,8 +701,8 @@ def import_cfg(keyid, ltsigpub, ltsigkey, export):
    servers = {name: {k:v for k, v in s.items()} for name,s in data['servers'].items()}
    for s in data['servers'].values():
       if "bleaddr" in s or 'usb_serial' in s:
-         s['client_sk']=a2b_base64(s['client_sk'])
          s['device_pk']=a2b_base64(s['device_pk'])
+         s['client_sk']=getnoisekey()
 
    m = connect_servers(data['servers'])
    # load peer long-term keys
@@ -692,7 +728,7 @@ def import_cfg(keyid, ltsigpub, ltsigkey, export):
 
    return True
 
-def provision(port, cfg_file, cfg, authkeys, uart, esp):
+def provision(ltsigkey, port, cfg_file, cfg, authkeys, uart, esp):
    # reset device
    if esp:
       from esptool.cmds import detect_chip
@@ -782,7 +818,6 @@ def provision(port, cfg_file, cfg, authkeys, uart, esp):
 
    table.update({'ltsigkey': b2a_base64(spk).decode('utf8').strip(),
                  'device_pk': b2a_base64(npk).decode('utf8').strip(),
-                 'client_sk': b2a_base64(noise_sk).decode('utf8').strip(),
                  })
 
    with NamedTemporaryFile(mode="w+", dir=os.path.dirname(cfg_file), delete=False, delete_on_close=False) as tmpfile:
@@ -819,13 +854,15 @@ def getargs(config, cmd, params):
       t = config['threshold']
       ts_epsilon=config['ts_epsilon']
       sig_pks = [a2b_base64(config['ltsigpub'][8:])]
+      ltsigkey = getltsigkey()
       servers={}
       for name, server in config['servers'].items():
          server=dict(server)
          servers[name]=(server)
          if 'bleaddr' in server or 'usb_serial' in server:
-            server['client_sk']=a2b_base64(server['client_sk'])
             server['device_pk']=a2b_base64(server['device_pk'])
+            server['client_sk']=getnoisekey()
+            #print("csk", server['client_sk'].hex(), file=sys.stderr)
          if 'ltsigkey' in server:
             sig_pks.append(a2b_base64(server['ltsigkey']))
             continue
@@ -834,7 +871,6 @@ def getargs(config, cmd, params):
            if(len(ltpk)!=pysodium.crypto_sign_PUBLICKEYBYTES):
              raise ValueError(f"long-term signature key for server {name} is of incorrect size")
            sig_pks.append(ltpk)
-      ltsigkey = getltsigkey()
       m = Multiplexer(servers)
       m.connect()
       return m, keyid, sig_pks[0], ltsigkey, t, ts_epsilon, sig_pks
@@ -842,7 +878,8 @@ def getargs(config, cmd, params):
    if cmd == rotate:
       keyid = pysodium.crypto_generichash(params[0], k=config['id_salt'])
       ts_epsilon=config['ts_epsilon']
-      m, keyid, _, epoch, t, _ = loadmeta(keyid)
+      ltsigkey = getltsigkey()
+      m, keyid, _, epoch, t, _ = loadmeta(keyid, ltsigkey)
       ltsigpub = a2b_base64(config['ltsigpub'][8:])
       sig_pks = [ltsigpub]
       with open(f"{config['keystore']}/{keyid.hex()}/servers", 'rb') as fd:
@@ -850,7 +887,6 @@ def getargs(config, cmd, params):
       for name, server in servers.items():
          sig_pks.append(a2b_base64(server['ltsigkey']))
          continue
-      ltsigkey = getltsigkey()
       return m, keyid, ltsigpub, ltsigkey, t, ts_epsilon, sig_pks, epoch
 
    if cmd == encrypt:
@@ -865,14 +901,14 @@ def getargs(config, cmd, params):
       ltsigkey = getltsigkey()
       keyid = os.read(0, KEYID_SIZE)
       ltsigpub = a2b_base64(config['ltsigpub'][8:])
-      m, _, pki, epoch, t, pkis = loadmeta(keyid)
+      m, _, pki, epoch, t, pkis = loadmeta(keyid, ltsigkey)
       return m, keyid, ltsigpub, ltsigkey, t, epoch, pki, pkis
 
    if cmd == adduser:
       keyid = pysodium.crypto_generichash(params[0], k=config['id_salt'])
       ltsigkey = getltsigkey()
       ltsigpub = a2b_base64(config['ltsigpub'][8:])
-      m, keyid, _, _, t, _ = loadmeta(keyid)
+      m, keyid, _, _, t, _ = loadmeta(keyid, ltsigkey)
       perm = 0
       sep = '|'
       for s in ',+| ':
@@ -895,21 +931,21 @@ def getargs(config, cmd, params):
       keyid = pysodium.crypto_generichash(params[0], k=config['id_salt'])
       ltsigkey = getltsigkey()
       ltsigpub = a2b_base64(config['ltsigpub'][8:])
-      m, keyid, _, _, _, _ = loadmeta(keyid)
+      m, keyid, _, _, _, _ = loadmeta(keyid, ltsigkey)
       return m, keyid, ltsigpub, ltsigkey
 
    if cmd == refresh:
       keyid = pysodium.crypto_generichash(params[0], k=config['id_salt'])
       ltsigkey = getltsigkey()
       ltsigpub = a2b_base64(config['ltsigpub'][8:])
-      m, keyid, pki, epoch, t, pkis = loadmeta(keyid)
+      m, keyid, pki, epoch, t, pkis = loadmeta(keyid, ltsigkey)
       return m, keyid, ltsigpub, ltsigkey, t, epoch, pki, pkis
 
    if cmd == deluser:
       keyid = pysodium.crypto_generichash(params[0], k=config['id_salt'])
       ltsigkey = getltsigkey()
       ltsigpub = a2b_base64(config['ltsigpub'][8:])
-      m, keyid, _, _, t, _ = loadmeta(keyid)
+      m, keyid, _, _, t, _ = loadmeta(keyid, ltsigkey)
       with open(f"{config['keystore']}/{keyid.hex()}/servers", 'rb') as fd:
          servers = tomlkit.load(fd)
       return m, keyid, ltsigpub, ltsigkey, params[1]
@@ -949,7 +985,8 @@ def getargs(config, cmd, params):
             esp=True
       with open(cfg_file,'rb') as fd:
           cfg = tomlkit.load(fd)
-      return port, cfg_file, cfg, authkeys, uart, esp
+      ltsigkey = getltsigkey()
+      return ltsigkey, port, cfg_file, cfg, authkeys, uart, esp
 
 def process_result(cmd, ret):
    if cmd == create:
@@ -1025,9 +1062,9 @@ def main(params=sys.argv):
   except Exception as exc:
     error = exc
     ret = False
-    if m is not None: m.close()
     if debug: raise
   finally:
+    if masterkey is not None: clearmem(masterkey)
     if ltsigkey is not None: clearmem(ltsigkey)
     if m is not None: m.close()
 
