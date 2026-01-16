@@ -30,7 +30,7 @@ start_server 4
 
 trap "cleanup" INT TERM QUIT
 if [ -n "$ORACLE_TAIL" ]; then
-   tail -f "$ORACLE_TAIL"/log
+   tail -n 50 -f "$ORACLE_TAIL"/log
 else
    while true; do sleep 1 ;done
 fi
