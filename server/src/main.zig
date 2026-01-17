@@ -672,9 +672,9 @@ fn open(cfg: *const Config, recid: []const u8, fieldid: []const u8) !std.fs.File
 fn loadx(cfg: *const Config, recid: []const u8, fieldid: []const u8, data: []u8) !void {
     const file = try open(cfg,recid,fieldid);
 
-    var buffer = [_]u8{0} ** 1024;
+    var buffer: [1024]u8 = undefined;
     var fr = file.reader(&buffer);
-    _ = try fr.read(data[0..]);
+    _ = try fr.interface.readSliceAll(data);
 }
 
 fn dkg(cfg: *const Config, s: *sslStream, req: *const CreateReq) *const [sodium.crypto_sign_PUBLICKEYBYTES]u8 {
@@ -1168,9 +1168,9 @@ fn auth(cfg: *const Config, s: *sslStream, op: KlutshnikOp, pk: *ed25519.PublicK
             fail(s);
         }
         const authbuf= allocator.alloc(u8, auth_size) catch @panic("oom");
-        var buffer = [_]u8{0} ** 1024;
+        var buffer: [1024]u8 = undefined;
         var fr = authfd.reader(&buffer);
-        _ = fr.read(authbuf[0..]) catch |err| {
+        _ = fr.interface.readSliceAll(authbuf) catch |err| {
             log("failed to load auth file: {}\n", .{err}, reqid);
             fail(s);
         };
@@ -1372,9 +1372,9 @@ fn modauth(cfg: *const Config, s: *sslStream, req: *const ModAuthReq) void {
         fail(s);
     }
     const authbuf= allocator.alloc(u8, auth_size) catch @panic("oom");
-    var buffer = [_]u8{0} ** 1024;
+    var buffer: [1024]u8 = undefined;
     var fr = authfd.reader(&buffer);
-    _ = fr.read(authbuf[0..]) catch |err| {
+    _ = fr.interface.readSliceAll(authbuf) catch |err| {
         log("failed to load auth file: {}\n", .{err}, &req.id);
         fail(s);
     };
