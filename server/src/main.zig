@@ -302,14 +302,17 @@ fn load_pubkeys(path: []const u8) !KeyStore {
 
     var k = [_]u8{0} ** sodium.crypto_generichash_BYTES;
 
-    while (reader.takeDelimiterExclusive('\n')) |line| {
-        var buf: [64]u8 = undefined;
-        try std.base64.standard.Decoder.decode(buf[0..], line);
-        const v = allocator.alloc(Pubkeys,1) catch @panic("oom");
-        @memcpy(&v[0].sigkey, buf[0..32]);
-        @memcpy(&v[0].noisekey, buf[32..]);
-        blake2b.hash(v[0].sigkey[0..], &k, .{});
-        try map.put(k, v[0]);
+    while (reader.takeDelimiter('\n')) |optional_line| {
+        if(optional_line) |line| {
+            //warn("load_pubkeys: {s}\n", .{line});
+            var buf: [64]u8 = undefined;
+            try std.base64.standard.Decoder.decode(buf[0..], line);
+            const v = allocator.alloc(Pubkeys,1) catch @panic("oom");
+            @memcpy(&v[0].sigkey, buf[0..32]);
+            @memcpy(&v[0].noisekey, buf[32..]);
+            blake2b.hash(v[0].sigkey[0..], &k, .{});
+            try map.put(k, v[0]);
+        } else break;
     } else |err| if (err != error.EndOfStream) {
         return err;
     }
