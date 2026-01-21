@@ -1,5 +1,6 @@
 #!/bin/sh
 
+apk add zstd
 colour_echo ">> Compress images"
 # copy final image
 mkdir -p ${OUTPUT_PATH}
