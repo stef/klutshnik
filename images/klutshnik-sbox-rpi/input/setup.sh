@@ -1,6 +1,6 @@
 #!/bin/sh -e
 
-if [ -f /etc/klutshnik/initialized ]; then
+if [ -f /etc/klutshnikd/initialized ]; then
 	return 0
 fi
 
@@ -9,10 +9,10 @@ exec >/data/klutshnik/setup.log 2>&1
 
 logger -t "rc.klutshnik-setup" "Setting up klutshnik"
 
-sed  "s/some natrium-chloride and some chilli/$(dd if=/dev/random bs=1 count=32 2>/dev/null | base32)/" </data/klutshnik/klutshnik.cfg_template >/etc/klutshnik/config
-openssl ecparam -genkey -out /etc/klutshnik/key.pem -name secp384r1
-openssl req -new -nodes -x509 -sha256 -key /etc/klutshnik/key.pem -out /etc/klutshnik/cert.pem -days 365 -subj '/CN=klutshnik-rpi'
-chown klutshnik /etc/klutshnik/cert.pem /etc/klutshnik/key.pem
+sed  "s/some natrium-chloride and some chilli/$(dd if=/dev/random bs=1 count=32 2>/dev/null | base32)/" </data/klutshnik/klutshnik.cfg_template >/etc/klutshnikd/config
+openssl ecparam -genkey -out /etc/klutshnikd/key.pem -name secp384r1
+openssl req -new -nodes -x509 -sha256 -key /etc/klutshnikd/key.pem -out /etc/klutshnikd/cert.pem -days 365 -subj '/CN=klutshnik-rpi'
+chown klutshnik /etc/klutshnikd/cert.pem /etc/klutshnikd/key.pem
 
 while read line; do
    case "$line" in
@@ -24,13 +24,13 @@ done <<EOF
 $(klutshnikd init 2>&1)
 EOF
 
-chown klutshnik:klutshnik /etc/klutshnik/ltsig.key
-chown klutshnik:klutshnik /etc/klutshnik/ltsig.key.pub
-chown klutshnik:klutshnik /etc/klutshnik/noise.key
-chown klutshnik:klutshnik /etc/klutshnik/noise.key.pub
+chown klutshnik:klutshnik /etc/klutshnikd/ltsig.key
+chown klutshnik:klutshnik /etc/klutshnikd/ltsig.key.pub
+chown klutshnik:klutshnik /etc/klutshnikd/noise.key
+chown klutshnik:klutshnik /etc/klutshnikd/noise.key.pub
 
-echo $authuser >>/etc/klutshnik/authorized_keys
-chown klutshnik:klutshnik /etc/klutshnik/authorized_keys
+echo $authuser >>/etc/klutshnikd/authorized_keys
+chown klutshnik:klutshnik /etc/klutshnikd/authorized_keys
 
 mount -o remount,rw /
 # set up tor
@@ -57,7 +57,7 @@ should be part of the same threshold setup:
 Store this Self-signed TLS cert in your clients config and point the servers
 stanza "ssl_cert" to this file, if you want a real cert, we have acme.sh,
 acme-tiny and certbot pre-installed:
-$(sed 's/^/\t/' /etc/klutshnik/cert.pem)
+$(sed 's/^/\t/' /etc/klutshnikd/cert.pem)
 
 Don't forget to set your ~/.ssh/authorized_keys and disable password logins in
 /etc/ssh/sshd_config
@@ -72,7 +72,7 @@ cd /data/klutshnik
 source env/bin/activate
 
 { cat test/servers/authorized_keys_template; echo $authuser; } >test/servers/authorized_keys
-cp test/servers/authorized_keys /etc/klutshnik/authorized_keys
+cp test/servers/authorized_keys /etc/klutshnikd/authorized_keys
 
 killall klutshnikd || true
 su klutshnik -c 'strace -I1 --kill-on-exit -fo /data/klutshnik/strace.log /usr/bin/klutshnikd >/data/klutshnik/log 2>/data/klutshnik/err' &
@@ -90,9 +90,9 @@ kill ${servers_pid} $straced_pid
 cd ..
 
 minijail/tools/generate_seccomp_policy.py strace.log >klutshnikd.seccomp
-minijail/tools/compile_seccomp_policy.py klutshnikd.seccomp /etc/klutshnik/klutshnikd.bpf
+minijail/tools/compile_seccomp_policy.py klutshnikd.seccomp /etc/klutshnikd/klutshnikd.bpf
 
-echo $authuser >/etc/klutshnik/authorized_keys
+echo $authuser >/etc/klutshnikd/authorized_keys
 
 # clean up
 
@@ -116,5 +116,4 @@ iptables -t nat -A PREROUTING -p tcp --dport 443 -j REDIRECT --to-port 2323
 /etc/init.d/iptables save
 rc-update add iptables default
 
-
-touch /etc/klutshnik/initialized
+touch /etc/klutshnikd/initialized

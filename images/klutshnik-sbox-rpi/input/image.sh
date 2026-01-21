@@ -5,7 +5,7 @@ chroot_exec adduser -D -g "klutshnik daemon" -h "/data/klutshnik" "klutshnik" "k
 cp "$INPUT_PATH/klutshnikd"  "$ROOTFS_PATH/usr/bin/klutshnikd"
 cp "$INPUT_PATH/init.sh" "$ROOTFS_PATH/etc/init.d/klutshnik"
 
-mkdir "$ROOTFS_PATH/etc/klutshnik"
+mkdir "$ROOTFS_PATH/etc/klutshnikd"
 cp "$INPUT_PATH/klutshnik.cfg_template" "$ROOTFS_PATH/data/klutshnik/klutshnik.cfg_template"
 cp "$INPUT_PATH/setup_init.sh" "$ROOTFS_PATH/etc/init.d/klutshnik-setup"
 cp "$INPUT_PATH/setup.sh" "$ROOTFS_PATH/usr/bin/klutshnik-setup"

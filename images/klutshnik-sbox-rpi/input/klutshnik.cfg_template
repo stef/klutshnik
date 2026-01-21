@@ -10,10 +10,10 @@
 address="0.0.0.0"
 
 # ssl key
-ssl_key="/etc/klutshnik/key.pem"
+ssl_key="/etc/klutshnikd/key.pem"
 
 # ssl cert
-ssl_cert="/etc/klutshnik/cert.pem"
+ssl_cert="/etc/klutshnikd/cert.pem"
 
 # the port on which the server is listening, use 443 if available, so that
 # the oracle can be accessed from behind tight firewalls, default: 8080
@@ -32,6 +32,6 @@ datadir="/data/klutshnik"
 
 verbose=true
 record_salt = "some natrium-chloride and some chilli"
-authorized_keys="/etc/klutshnik/authorized_keys"
-ltsigkey="/etc//klutshnik/ltsig.key"
-noisekey="/etc/klutshnik/noise.key"
+authorized_keys="/etc/klutshnikd/authorized_keys"
+ltsigkey="/etc/klutshnikd/ltsig.key"
+noisekey="/etc/klutshnikd/noise.key"

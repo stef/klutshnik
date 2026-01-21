@@ -24,7 +24,7 @@ bwrap --unshare-all \
       --hostname klutshnik-rpi \
       --die-with-parent \
       --ro-bind "$1" /klutshnikd \
-      --file 0 /klutshnik.cfg \
+      --file 0 /klutshnikd.cfg \
       --bind "$datadir" /data \
       --ro-bind "$ssl_cert" /cert.pem \
       --ro-bind "$ssl_key" /key.pem \
