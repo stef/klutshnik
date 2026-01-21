@@ -15,7 +15,7 @@ cp -a "$INPUT_PATH/test" "$ROOTFS_PATH/data/klutshnik/test"
 
 chroot_exec rc-update add klutshnik default
 chroot_exec rc-update add klutshnik-setup default
-chroot_exec apk add openssl acme.sh acme-tiny certbot libsodium strace git make netcat-openbsd linux-headers g++ gcc libsodium-dev py3-virtualenv py3-pip python3-dev openssl-dev bubblewrap nginx iptables tor
+chroot_exec apk add openssl acme.sh acme-tiny certbot libsodium strace git make netcat-openbsd linux-headers g++ gcc libsodium-dev py3-virtualenv py3-pip python3-dev openssl-dev bubblewrap nginx iptables tor yq-go
 
 chroot_exec virtualenv --system-site-packages /data/klutshnik/env
 
