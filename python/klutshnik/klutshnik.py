@@ -583,7 +583,6 @@ def auth(m, op, keyid, reqbuf, sk):
 
   for i, nonce in enumerate(nonces):
     resp = pysodium.crypto_sign_detached(op+VERSION+keyid+reqbuf+nonce,sk)
-    #print(f"sig: {resp.hex()}\ndata: {(op+VERSION+keyid+reqbuf+nonce).hex()}", file=sys.stderr)
     send_pkt(m, resp, i)
 
 def deluser(m, keyid, ltsigpub, ltsigkey, pubkey):
