@@ -1,4 +1,4 @@
-#!/bin/sh -x
+#!/bin/sh
 
 ORACLE=${ORACLE:-klutshnikd}
 PIDS=""
@@ -24,6 +24,6 @@ start_server 2
 start_server 3
 start_server 4
 
-trap "cleanup" INT TERM
+trap "cleanup" INT TERM QUIT
 #tail -f 1/log
 while true; do sleep 1 ;done
