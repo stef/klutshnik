@@ -19,7 +19,6 @@ start_server() {
    fi
    PIDS="$PIDS $!"
    cd ..
-   sleep 0.1
 }
 
 start_server 0
@@ -27,6 +26,8 @@ start_server 1
 start_server 2
 start_server 3
 start_server 4
+
+sleep 0.3
 
 trap "cleanup" INT TERM QUIT
 if [ -n "$ORACLE_TAIL" ]; then
