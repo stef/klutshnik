@@ -45,7 +45,7 @@ The results are stored in the `./output` directory.
 Writing the image can be done as follows:
 
 ```sh
-gzip -dc output/sdcard.img.gz >sdcard.img
+zstd -dc output/sdcard.img.zst >sdcard.img
 sudo dd if=sdcard.img of=/dev/mmcblk0
 ```
 
