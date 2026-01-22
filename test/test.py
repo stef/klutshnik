@@ -89,8 +89,9 @@ def clean_dir(d):
           raise
 
 test_path = path.dirname(path.abspath(__file__))
-klutshnik.config = klutshnik.processcfg(getcfg('klutshnik', test_path ))
-klutshnik.config['ltsigkey_path']="client.key"
+c, cfg_files = getcfg('klutshnik')
+klutshnik.config = klutshnik.processcfg(c)
+klutshnik.config['clientkey_path']="client.key"
 
 def connect(peers=None):
   if peers == None:
@@ -100,7 +101,7 @@ def connect(peers=None):
   return m
 
 def create(kid):
-  m, kid, ltsigpub, ltsigkey, t, ts_epsilon, sig_pks = klutshnik.getargs(klutshnik.config, klutshnik.create, [kid])
+  m, kid, ltsigpub, ltsigkey, t, ts_epsilon, sig_pks = klutshnik.getargs(klutshnik.config, klutshnik.create, [kid], cfg_files)
   k_id, epoch, pki, pkis = klutshnik.create(m, kid, ltsigpub, ltsigkey, t, ts_epsilon, sig_pks)
   m.close()
   klutshnik.savemeta(k_id, pki, pkis, klutshnik.config['threshold'], 0, klutshnik.get_servers())
@@ -108,13 +109,13 @@ def create(kid):
 
 def decrypt(ct):
   ctx = wrapio(ct)
-  m, kid, ltsigpub, ltsigkey, t, epoch, pki, pkis = klutshnik.getargs(klutshnik.config, klutshnik.decrypt, [])
+  m, kid, ltsigpub, ltsigkey, t, epoch, pki, pkis = klutshnik.getargs(klutshnik.config, klutshnik.decrypt, [], cfg_files)
   klutshnik.decrypt(m, kid, ltsigpub, ltsigkey, t, epoch, pki, pkis)
   m.close()
   return unwrapio(ctx, len(ct)-96)
 
 def refresh():
-  m, kid, ltsigpub, ltsigkey, t, lepoch, lpki, lpkis = klutshnik.getargs(klutshnik.config, klutshnik.refresh, [keyid])
+  m, kid, ltsigpub, ltsigkey, t, lepoch, lpki, lpkis = klutshnik.getargs(klutshnik.config, klutshnik.refresh, [keyid], cfg_files)
   save, kid, pki, pkis, t, epoch = klutshnik.refresh(m, kid, ltsigpub, ltsigkey, t, lepoch, lpki, lpkis)
   m.close
   if save:
@@ -122,7 +123,7 @@ def refresh():
   return save
 
 def rotate(keyid):
-  m, kidr0, ltsigpub, ltsigkey, t, ts_epsilon, sig_pks, lepoch = klutshnik.getargs(klutshnik.config, klutshnik.rotate, [keyid])
+  m, kidr0, ltsigpub, ltsigkey, t, ts_epsilon, sig_pks, lepoch = klutshnik.getargs(klutshnik.config, klutshnik.rotate, [keyid], cfg_files)
   kidr1, t, epoch, pki, pkis, delta = klutshnik.rotate(m, kidr0, ltsigpub, ltsigkey, t, ts_epsilon, sig_pks, lepoch)
   klutshnik.savemeta(kidr1, pki, pkis, t, epoch)
   return (f"KLCDELTA-{b2a_base64(kidr1+struct.pack('>I',epoch)+delta).decode('utf8').strip()}",
@@ -135,7 +136,7 @@ def update(ct, delta):
 
   stdin = sys.stdin
   sys.stdin = Input(f"{delta}\n{name}".encode("utf8"))
-  kidu, delta, epoch_u = klutshnik.getargs(klutshnik.config, klutshnik.update, [])
+  kidu, delta, epoch_u = klutshnik.getargs(klutshnik.config, klutshnik.update, [], cfg_files)
   klutshnik.update(kidu, delta, epoch_u)
   sys.stdin = stdin
   with open(name, 'rb') as fd:
@@ -145,7 +146,7 @@ def update(ct, delta):
 
 def adduser(pk, perms):
   params = [keyid, pk, perms]
-  m, kid, ltsigpub, ltsigkey, userpub, perm, t, servers = klutshnik.getargs(klutshnik.config, klutshnik.adduser, params)
+  m, kid, ltsigpub, ltsigkey, userpub, perm, t, servers = klutshnik.getargs(klutshnik.config, klutshnik.adduser, params, cfg_files)
   xprt = klutshnik.adduser(m, kid, ltsigpub, ltsigkey, userpub, perm, t, servers)
   m.close()
   return f"KLTCFG-{b2a_base64(lzma.compress(xprt.encode('utf8'))).decode('utf8').strip()}"
@@ -211,7 +212,7 @@ class TestEndToEnd(unittest.TestCase):
       k_id, epoch, pki, pkis = create(keyid)
 
       pk = f"KLCPK-{b2a_base64(k_id+epoch+pki).decode('utf8').strip()}"
-      kid, pk = klutshnik.getargs(klutshnik.config, klutshnik.encrypt, [pk])
+      kid, pk = klutshnik.getargs(klutshnik.config, klutshnik.encrypt, [pk], cfg_files)
 
       # start encrypt stdin/out fuckery
       ctx = wrapio(data)
@@ -225,7 +226,7 @@ class TestEndToEnd(unittest.TestCase):
       k_id, epoch, pki, pkis = create(keyid)
 
       pk = f"KLCPK-{b2a_base64(k_id+epoch+pki).decode('utf8').strip()}"
-      kid, pk = klutshnik.getargs(klutshnik.config, klutshnik.encrypt, [pk])
+      kid, pk = klutshnik.getargs(klutshnik.config, klutshnik.encrypt, [pk], cfg_files)
 
       # start encrypt stdin/out fuckery
       ctx = wrapio(data)
@@ -244,7 +245,7 @@ class TestEndToEnd(unittest.TestCase):
       k_id, epoch, pki, pkis = create(keyid)
       # list key owner
 
-      m, kid, ltsigpub, ltsigkey = klutshnik.getargs(klutshnik.config, klutshnik.listusers, [keyid])
+      m, kid, ltsigpub, ltsigkey = klutshnik.getargs(klutshnik.config, klutshnik.listusers, [keyid], cfg_files)
       output = StringIO()
       stdout = sys.stdout
       sys.stdout = output
@@ -267,7 +268,7 @@ class TestEndToEnd(unittest.TestCase):
 
       # list users
 
-      m, kid, ltsigpub, ltsigkey = klutshnik.getargs(klutshnik.config, klutshnik.listusers, [keyid])
+      m, kid, ltsigpub, ltsigkey = klutshnik.getargs(klutshnik.config, klutshnik.listusers, [keyid], cfg_files)
       output = StringIO()
       stdout = sys.stdout
       sys.stdout = output
@@ -286,7 +287,7 @@ class TestEndToEnd(unittest.TestCase):
       k_id, epoch, pki, pkis = create(keyid)
 
       pk = f"KLCPK-{b2a_base64(k_id+epoch+pki).decode('utf8').strip()}"
-      kid, pk = klutshnik.getargs(klutshnik.config, klutshnik.encrypt, [pk])
+      kid, pk = klutshnik.getargs(klutshnik.config, klutshnik.encrypt, [pk], cfg_files)
 
       # start encrypt stdin/out fuckery
       ctx = wrapio(data)
@@ -294,7 +295,7 @@ class TestEndToEnd(unittest.TestCase):
       ct = unwrapio(ctx, 1000)
 
       # add a user
-      userpk ='13lty/jQszJ1Xn5krTC2kltvPJDMqb4bqk3jgZxR430='
+      userpk ='HiQyp3YI8AhsWLAeEnUqZi0Mya1QRVd5kne+MOEUyROL/y/MnRTGcCTHoLPpBwuIrqTtBhCg4ehaLvPPvl9EJA=='
       perms = 'decrypt,update'
       xprt=adduser(userpk, perms)
 
@@ -303,11 +304,13 @@ class TestEndToEnd(unittest.TestCase):
       cwd = os.getcwd()
       os.chdir("otherclient")
       try:
-        klutshnik.config = klutshnik.processcfg(klutshnik.getcfg('klutshnik'))
+        c, cfg_files2 = getcfg('klutshnik')
+        klutshnik.config = klutshnik.processcfg(c)
+        klutshnik.masterkey = None
 
         # import owners key related metada
         params = [otherkeyid, xprt]
-        kid, ltsigpub, ltsigkey, export = klutshnik.getargs(klutshnik.config, klutshnik.import_cfg, params)
+        kid, ltsigpub, ltsigkey, export = klutshnik.getargs(klutshnik.config, klutshnik.import_cfg, params, cfg_files2)
         klutshnik.import_cfg(kid, ltsigpub, ltsigkey, export)
 
         # decrypt
@@ -315,13 +318,14 @@ class TestEndToEnd(unittest.TestCase):
 
       finally:
         klutshnik.config = orig_config
+        klutshnik.masterkey = None
         os.chdir(cwd)
 
     def test_0080_update_other_user(self):
       k_id, epoch, pki, pkis = create(keyid)
 
       pk = f"KLCPK-{b2a_base64(k_id+epoch+pki).decode('utf8').strip()}"
-      kid, pk = klutshnik.getargs(klutshnik.config, klutshnik.encrypt, [pk])
+      kid, pk = klutshnik.getargs(klutshnik.config, klutshnik.encrypt, [pk], cfg_files)
 
       # start encrypt stdin/out fuckery
       ctx = wrapio(data)
@@ -329,7 +333,7 @@ class TestEndToEnd(unittest.TestCase):
       ct = unwrapio(ctx, 1000)
 
       # add a user
-      userpk ='13lty/jQszJ1Xn5krTC2kltvPJDMqb4bqk3jgZxR430='
+      userpk ='HiQyp3YI8AhsWLAeEnUqZi0Mya1QRVd5kne+MOEUyROL/y/MnRTGcCTHoLPpBwuIrqTtBhCg4ehaLvPPvl9EJA=='
       perms = 'decrypt,update'
       xprt=adduser(userpk, perms)
 
@@ -338,11 +342,13 @@ class TestEndToEnd(unittest.TestCase):
       cwd = os.getcwd()
       os.chdir("otherclient")
       try:
-        klutshnik.config = klutshnik.processcfg(klutshnik.getcfg('klutshnik'))
+        c, cfg_files2 = getcfg('klutshnik')
+        klutshnik.config = klutshnik.processcfg(c)
+        klutshnik.masterkey = None
 
         # import owners key related metada
         params = [otherkeyid, xprt]
-        kid, ltsigpub, ltsigkey, export = klutshnik.getargs(klutshnik.config, klutshnik.import_cfg, params)
+        kid, ltsigpub, ltsigkey, export = klutshnik.getargs(klutshnik.config, klutshnik.import_cfg, params, cfg_files2)
         klutshnik.import_cfg(kid, ltsigpub, ltsigkey, export)
 
         delta_txt, npk = rotate(otherkeyid)
@@ -354,6 +360,7 @@ class TestEndToEnd(unittest.TestCase):
 
       finally:
         klutshnik.config = orig_config
+        klutshnik.masterkey = None
         os.chdir(cwd)
 
     def test_0090_unauth_delete(self):
@@ -361,7 +368,7 @@ class TestEndToEnd(unittest.TestCase):
       k_id, epoch, pki, pkis = create(keyid)
 
       # add a user
-      userpk ='13lty/jQszJ1Xn5krTC2kltvPJDMqb4bqk3jgZxR430='
+      userpk ='HiQyp3YI8AhsWLAeEnUqZi0Mya1QRVd5kne+MOEUyROL/y/MnRTGcCTHoLPpBwuIrqTtBhCg4ehaLvPPvl9EJA=='
       perms = 'decrypt,update'
       xprt=adduser(userpk, perms)
 
@@ -370,33 +377,36 @@ class TestEndToEnd(unittest.TestCase):
       cwd = os.getcwd()
       os.chdir("otherclient")
       try:
-        klutshnik.config = klutshnik.processcfg(klutshnik.getcfg('klutshnik'))
+        c, cfg_files2 = getcfg('klutshnik')
+        klutshnik.config = klutshnik.processcfg(c)
+        klutshnik.masterkey = None
 
         # import owners key related metada
         params = [otherkeyid, xprt]
-        kid, ltsigpub, ltsigkey, export = klutshnik.getargs(klutshnik.config, klutshnik.import_cfg, params)
+        kid, ltsigpub, ltsigkey, export = klutshnik.getargs(klutshnik.config, klutshnik.import_cfg, params, cfg_files2)
         klutshnik.import_cfg(kid, ltsigpub, ltsigkey, export)
 
         # delete key
-        m, kid, ltsigpub, ltsigkey = klutshnik.getargs(klutshnik.config, klutshnik.delete, [otherkeyid])
+        m, kid, ltsigpub, ltsigkey = klutshnik.getargs(klutshnik.config, klutshnik.delete, [otherkeyid], cfg_files)
         self.assertFalse(klutshnik.delete(m, kid, ltsigpub, ltsigkey))
         m.close()
 
       finally:
         klutshnik.config = orig_config
+        klutshnik.masterkey = None
         os.chdir(cwd)
 
     def test_0100_del_user(self):
       k_id, epoch, pki, pkis = create(keyid)
 
       # add a user
-      userpk ='13lty/jQszJ1Xn5krTC2kltvPJDMqb4bqk3jgZxR430='
+      userpk ='HiQyp3YI8AhsWLAeEnUqZi0Mya1QRVd5kne+MOEUyROL/y/MnRTGcCTHoLPpBwuIrqTtBhCg4ehaLvPPvl9EJA=='
       perms = 'decrypt,update'
       xprt=adduser(userpk, perms)
 
       # list users
 
-      m, kid, ltsigpub, ltsigkey = klutshnik.getargs(klutshnik.config, klutshnik.listusers, [keyid])
+      m, kid, ltsigpub, ltsigkey = klutshnik.getargs(klutshnik.config, klutshnik.listusers, [keyid], cfg_files)
       output = StringIO()
       stdout = sys.stdout
       sys.stdout = output
@@ -409,16 +419,16 @@ class TestEndToEnd(unittest.TestCase):
       # Get the printed output
       self.assertEqual(output.getvalue().strip(),
                        f"{ltsigpub.hex()} owner,decrypt,update,delete\n"
-                       f"{a2b_base64(userpk).hex()} {perms}")
+                       f"{a2b_base64(userpk)[:32].hex()} {perms}")
 
       # deluser
       params = [keyid, userpk]
-      m, kid, ltsigpub, ltsigkey, pubkey = klutshnik.getargs(klutshnik.config, klutshnik.deluser, params)
+      m, kid, ltsigpub, ltsigkey, pubkey = klutshnik.getargs(klutshnik.config, klutshnik.deluser, params, cfg_files)
       klutshnik.deluser(m, kid, ltsigpub, ltsigkey, pubkey)
       m.close()
 
       # list users
-      m, kid, ltsigpub, ltsigkey = klutshnik.getargs(klutshnik.config, klutshnik.listusers, [keyid])
+      m, kid, ltsigpub, ltsigkey = klutshnik.getargs(klutshnik.config, klutshnik.listusers, [keyid], cfg_files)
       output = StringIO()
       stdout = sys.stdout
       sys.stdout = output
@@ -435,7 +445,7 @@ class TestEndToEnd(unittest.TestCase):
       k_id, epoch, pki, pkis = create(keyid)
 
       pk = f"KLCPK-{b2a_base64(k_id+epoch+pki).decode('utf8').strip()}"
-      kid, pk = klutshnik.getargs(klutshnik.config, klutshnik.encrypt, [pk])
+      kid, pk = klutshnik.getargs(klutshnik.config, klutshnik.encrypt, [pk], cfg_files)
 
       # start encrypt stdin/out fuckery
       ctx = wrapio(data)
@@ -443,7 +453,7 @@ class TestEndToEnd(unittest.TestCase):
       ct = unwrapio(ctx, 1000)
 
       # delete key
-      m, kid, ltsigpub, ltsigkey = klutshnik.getargs(klutshnik.config, klutshnik.delete, [keyid])
+      m, kid, ltsigpub, ltsigkey = klutshnik.getargs(klutshnik.config, klutshnik.delete, [keyid], cfg_files)
       self.assertTrue(klutshnik.delete(m, kid, ltsigpub, ltsigkey))
       m.close()
 
@@ -454,7 +464,7 @@ class TestEndToEnd(unittest.TestCase):
       k_id, epoch, pki, pkis = create(keyid)
 
       pk = f"KLCPK-{b2a_base64(k_id+epoch+pki).decode('utf8').strip()}"
-      kid, pk = klutshnik.getargs(klutshnik.config, klutshnik.encrypt, [pk])
+      kid, pk = klutshnik.getargs(klutshnik.config, klutshnik.encrypt, [pk], cfg_files)
 
       # start encrypt stdin/out fuckery
       ctx = wrapio(data)
@@ -462,7 +472,7 @@ class TestEndToEnd(unittest.TestCase):
       ct = unwrapio(ctx, 1000)
 
       # add a user
-      userpk ='13lty/jQszJ1Xn5krTC2kltvPJDMqb4bqk3jgZxR430='
+      userpk ='HiQyp3YI8AhsWLAeEnUqZi0Mya1QRVd5kne+MOEUyROL/y/MnRTGcCTHoLPpBwuIrqTtBhCg4ehaLvPPvl9EJA=='
       perms = 'decrypt,update'
       xprt=adduser(userpk, perms)
 
@@ -471,18 +481,21 @@ class TestEndToEnd(unittest.TestCase):
       cwd = os.getcwd()
       os.chdir("otherclient")
       try:
-        klutshnik.config = klutshnik.processcfg(klutshnik.getcfg('klutshnik'))
+        c, cfg_files2 = getcfg('klutshnik')
+        klutshnik.config = klutshnik.processcfg(c)
+        klutshnik.masterkey = None
 
         # import owners key related metada
         params = [otherkeyid, xprt]
-        kid, ltsigpub, ltsigkey, export = klutshnik.getargs(klutshnik.config, klutshnik.import_cfg, params)
+        kid, ltsigpub, ltsigkey, export = klutshnik.getargs(klutshnik.config, klutshnik.import_cfg, params, cfg_files2)
         klutshnik.import_cfg(kid, ltsigpub, ltsigkey, export)
       finally:
         klutshnik.config = orig_config
+        klutshnik.masterkey = None
         os.chdir(cwd)
 
       # owner deletes key
-      m, kid, ltsigpub, ltsigkey = klutshnik.getargs(klutshnik.config, klutshnik.delete, [keyid])
+      m, kid, ltsigpub, ltsigkey = klutshnik.getargs(klutshnik.config, klutshnik.delete, [keyid], cfg_files)
       self.assertTrue(klutshnik.delete(m, kid, ltsigpub, ltsigkey))
       m.close()
 
@@ -503,7 +516,7 @@ class TestEndToEnd(unittest.TestCase):
       k_id, epoch, pki, pkis = create(keyid)
 
       pk = f"KLCPK-{b2a_base64(k_id+epoch+pki).decode('utf8').strip()}"
-      kid, pk = klutshnik.getargs(klutshnik.config, klutshnik.encrypt, [pk])
+      kid, pk = klutshnik.getargs(klutshnik.config, klutshnik.encrypt, [pk], cfg_files)
 
       # start encrypt stdin/out fuckery
       ctx = wrapio(data)
@@ -511,7 +524,7 @@ class TestEndToEnd(unittest.TestCase):
       ct = unwrapio(ctx, 1000)
 
       # add a user
-      userpk ='13lty/jQszJ1Xn5krTC2kltvPJDMqb4bqk3jgZxR430='
+      userpk ='HiQyp3YI8AhsWLAeEnUqZi0Mya1QRVd5kne+MOEUyROL/y/MnRTGcCTHoLPpBwuIrqTtBhCg4ehaLvPPvl9EJA=='
       perms = 'decrypt,update'
       xprt=adduser(userpk, perms)
 
@@ -520,11 +533,13 @@ class TestEndToEnd(unittest.TestCase):
       cwd = os.getcwd()
       os.chdir("otherclient")
       try:
-        klutshnik.config = klutshnik.processcfg(klutshnik.getcfg('klutshnik'))
+        c, cfg_files2 = getcfg('klutshnik')
+        klutshnik.config = klutshnik.processcfg(c)
+        klutshnik.masterkey = None
 
         # import owners key related metada
         params = [otherkeyid, xprt]
-        kid, ltsigpub, ltsigkey, export = klutshnik.getargs(klutshnik.config, klutshnik.import_cfg, params)
+        kid, ltsigpub, ltsigkey, export = klutshnik.getargs(klutshnik.config, klutshnik.import_cfg, params, cfg_files2)
         klutshnik.import_cfg(kid, ltsigpub, ltsigkey, export)
 
         # other user rotates
@@ -535,6 +550,7 @@ class TestEndToEnd(unittest.TestCase):
 
       finally:
         klutshnik.config = orig_config
+        klutshnik.masterkey = None
         os.chdir(cwd)
 
       # decrypt without refresh must fail
