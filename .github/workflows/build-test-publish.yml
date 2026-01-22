@@ -20,7 +20,7 @@ jobs:
       - name: Setup Zig Compiler
         uses: mlugg/setup-zig@v2
         with:
-          version: 0.15.1 # Specify the Zig version you need
+          version: 0.15.2 # Specify the Zig version you need
 
       # Step 3: Build the Zig binary
       - name: Build Zig Binary
