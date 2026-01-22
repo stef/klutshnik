@@ -262,7 +262,7 @@ class TestEndToEnd(unittest.TestCase):
       k_id, epoch, pki, pkis = create(keyid)
 
       # add a user
-      userpk ='13lty/jQszJ1Xn5krTC2kltvPJDMqb4bqk3jgZxR430='
+      userpk ='Nx+2tXa6AO2l08jADqkXOsCYVv+r1x4IL7gQKoPKKZ9tsAGpvy5S6ZKYlnjbkeVaSXxtKK3Iuj177vQpW5h2dQ=='
       perms = 'decrypt,update'
       adduser(userpk, perms)
 
@@ -281,7 +281,7 @@ class TestEndToEnd(unittest.TestCase):
       # Get the printed output
       self.assertEqual(output.getvalue().strip(),
                        f"{ltsigpub.hex()} owner,decrypt,update,delete\n"
-                       f"{a2b_base64(userpk).hex()} {perms}")
+                       f"{a2b_base64(userpk)[:32].hex()} {perms}")
 
     def test_0070_decrypt_other_user(self):
       k_id, epoch, pki, pkis = create(keyid)
@@ -295,7 +295,7 @@ class TestEndToEnd(unittest.TestCase):
       ct = unwrapio(ctx, 1000)
 
       # add a user
-      userpk ='HiQyp3YI8AhsWLAeEnUqZi0Mya1QRVd5kne+MOEUyROL/y/MnRTGcCTHoLPpBwuIrqTtBhCg4ehaLvPPvl9EJA=='
+      userpk ='Nx+2tXa6AO2l08jADqkXOsCYVv+r1x4IL7gQKoPKKZ9tsAGpvy5S6ZKYlnjbkeVaSXxtKK3Iuj177vQpW5h2dQ=='
       perms = 'decrypt,update'
       xprt=adduser(userpk, perms)
 
@@ -333,7 +333,7 @@ class TestEndToEnd(unittest.TestCase):
       ct = unwrapio(ctx, 1000)
 
       # add a user
-      userpk ='HiQyp3YI8AhsWLAeEnUqZi0Mya1QRVd5kne+MOEUyROL/y/MnRTGcCTHoLPpBwuIrqTtBhCg4ehaLvPPvl9EJA=='
+      userpk ='Nx+2tXa6AO2l08jADqkXOsCYVv+r1x4IL7gQKoPKKZ9tsAGpvy5S6ZKYlnjbkeVaSXxtKK3Iuj177vQpW5h2dQ=='
       perms = 'decrypt,update'
       xprt=adduser(userpk, perms)
 
@@ -368,7 +368,7 @@ class TestEndToEnd(unittest.TestCase):
       k_id, epoch, pki, pkis = create(keyid)
 
       # add a user
-      userpk ='HiQyp3YI8AhsWLAeEnUqZi0Mya1QRVd5kne+MOEUyROL/y/MnRTGcCTHoLPpBwuIrqTtBhCg4ehaLvPPvl9EJA=='
+      userpk ='Nx+2tXa6AO2l08jADqkXOsCYVv+r1x4IL7gQKoPKKZ9tsAGpvy5S6ZKYlnjbkeVaSXxtKK3Iuj177vQpW5h2dQ=='
       perms = 'decrypt,update'
       xprt=adduser(userpk, perms)
 
@@ -400,7 +400,7 @@ class TestEndToEnd(unittest.TestCase):
       k_id, epoch, pki, pkis = create(keyid)
 
       # add a user
-      userpk ='HiQyp3YI8AhsWLAeEnUqZi0Mya1QRVd5kne+MOEUyROL/y/MnRTGcCTHoLPpBwuIrqTtBhCg4ehaLvPPvl9EJA=='
+      userpk ='Nx+2tXa6AO2l08jADqkXOsCYVv+r1x4IL7gQKoPKKZ9tsAGpvy5S6ZKYlnjbkeVaSXxtKK3Iuj177vQpW5h2dQ=='
       perms = 'decrypt,update'
       xprt=adduser(userpk, perms)
 
@@ -472,7 +472,7 @@ class TestEndToEnd(unittest.TestCase):
       ct = unwrapio(ctx, 1000)
 
       # add a user
-      userpk ='HiQyp3YI8AhsWLAeEnUqZi0Mya1QRVd5kne+MOEUyROL/y/MnRTGcCTHoLPpBwuIrqTtBhCg4ehaLvPPvl9EJA=='
+      userpk ='Nx+2tXa6AO2l08jADqkXOsCYVv+r1x4IL7gQKoPKKZ9tsAGpvy5S6ZKYlnjbkeVaSXxtKK3Iuj177vQpW5h2dQ=='
       perms = 'decrypt,update'
       xprt=adduser(userpk, perms)
 
@@ -524,7 +524,7 @@ class TestEndToEnd(unittest.TestCase):
       ct = unwrapio(ctx, 1000)
 
       # add a user
-      userpk ='HiQyp3YI8AhsWLAeEnUqZi0Mya1QRVd5kne+MOEUyROL/y/MnRTGcCTHoLPpBwuIrqTtBhCg4ehaLvPPvl9EJA=='
+      userpk ='Nx+2tXa6AO2l08jADqkXOsCYVv+r1x4IL7gQKoPKKZ9tsAGpvy5S6ZKYlnjbkeVaSXxtKK3Iuj177vQpW5h2dQ=='
       perms = 'decrypt,update'
       xprt=adduser(userpk, perms)
 

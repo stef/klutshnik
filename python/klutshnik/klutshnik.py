@@ -214,14 +214,14 @@ def getclientkey():
 
 def getltsigkey():
   mk = getclientkey()
-  seed = pysodium.crypto_kdf_hkdf_sha512_expand(32, mk, "klutshnik client long-term signature key")
+  seed = pysodium.crypto_generichash("klutshnik client long-term signature key", mk, 32)
   _, sk = pysodium.crypto_sign_seed_keypair(seed)
   clearmem(seed)
   return sk
 
 def getnoisekey():
   mk = getclientkey()
-  return pysodium.crypto_kdf_hkdf_sha512_expand(32, mk, "klutshnik client noise sk")
+  return pysodium.crypto_generichash("klutshnik client noise sk", mk, 32)
 
 def get_servers(keyid = None):
    servers = {}
