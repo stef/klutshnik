@@ -124,6 +124,6 @@ To use Klutshnik, you need a client and a few servers.
 
 * Acknowledgements
 
-This project is funded through [[https://nlnet.nl/entrust][NGI0 Entrust]], a fund established by
+This project was funded through [[https://nlnet.nl/entrust][NGI0 Entrust]], a fund established by
 [[https://nlnet.nl][NLnet]] with financial support from the European Commission's [[https://ngi.eu][Next
 Generation Internet]] program. Learn more at the [[https://nlnet.nl/project/ThresholdOPRF][NLnet project page]].
