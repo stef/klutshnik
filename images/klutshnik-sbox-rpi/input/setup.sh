@@ -85,7 +85,7 @@ servers_pid=$!
 
 cd ..
 rm -rf keystore/[0-9a-f]* otherclient/keystore/[0-9a-f]* || true
-./test.sh || true
+./test.sh
 kill ${servers_pid} $straced_pid
 cd ..
 
