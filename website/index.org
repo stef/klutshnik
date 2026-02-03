@@ -1,4 +1,4 @@
-#+TITLE: Klutshnik Key-Management System
+#+TITLE: klutshnik Key Management System
 #+AUTHOR: klutshnik
 #+OPTIONS:   H:2 num:t toc:nil \n:nil @:t ::t |:t ^:t -:t f:t *:t <:t
 #+OPTIONS:   TeX:t LaTeX:t skip:nil d:nil todo:t pri:nil tags:not-in-toc
@@ -24,13 +24,11 @@
 
 * About Klutshnik
 
-Klutshnik is a system which **encrypts data-at-rest**: backups, files,
-archives - for you or your group. Yawn, even PGP ~^W~ Age can do that. Yes,
-but they cannot do regular and cheap key updates on an untrusted
-storage, providing post-compromise security (PCS) or forward secrecy
-(FS). And they cannot do the best part, sharing the encryption key in a
-threshold setup, which is never even assembled, so chances of
-accidental leakage are 0.
+Klutshnik is a system which **encrypts data-at-rest**: backups, files, and archives.
+
+Yawn. Even PGP or Age can do that. Yes, but can they rotate keys without decrypting terabytes of data? Can they share your key across multiple servers so it *never* exists in one place? Can they guarantee that if your key is stolen today, the thief can't decrypt backups from yesterday (Forward Secrecy) or tomorrow (Post-Compromise Security)?
+
+No.
 
 Klutshnik:
  - is [[*Self-hosted and Free Software][free software]],
@@ -40,87 +38,86 @@ Klutshnik:
 
 ** System Roles
 
-In a klutshnik system there are 3 roles:
+In a Klutshnik system, there are 3 roles:
 
- - A client who has data they want to store securely for usage in the
-   future.
- - A storage, which can store large amounts of data cheaply and
-   reliably. This server is untrusted by the client, with the
+ - **The Client:** You. You have files to protect.
+ - **The Storage:** Where you can store large amounts of data cheaply and
+   reliably, such as S3, Dropbox, or a hard drive. This server is untrusted by the client, with the
    exception that the client trusts the storage server to not corrupt
    the stored data (integrity) and does not deny service to the client
    (availability).
- - A group of key managment servers (KMS), which the client can use to
-   decrypt the data stored at the storage servers, without these key
-   management servers only having access to parts of a secret that is
-   used to derive decryption keys securely without ever having access
-   to either cipher nor the plaintext stored at the storage server.
+ - **The KM Servers:** A group of servers that hold shares of a master secret. They help you calculate decryption keys using a blinded protocol, such that they never see your data, your password, or even the final key.
 
-** Data-at-rest vs Data-in-transit
+** The Problem: Data-at-rest vs. Data-in-transit
 
-For data data-in-transit (messaging) we had post-compromise security
-and forward secrecy for quite a long time. Both these security
-properties (PCS & FS) are achieved by synchronously generating new
-keys at the sender and the receiver and using the updated keys for the
-next message to be sent. This way, if a key gets compromised only the
-messages that were encrypted with the key could be decrypted, but
-previous messages (forward secrecy) and future messages
-(post-compromise security) were safe.
+To understand why Klutshnik exists, we have to look at how we handle secrets differently in messaging vs. storage.
 
+*** Data-in-Transit
+For data-in-transit (messaging), we have **Forward Secrecy (FS)** and **Post-Compromise Security (PCS)**. These security
+properties (PCS & FS) are achieved by generating new ephemeral keys for every message. If a key is stolen, the attacker can strip that one message, but they can't decrypt previous messages (FS) and future messages (PCS).
+
+*** Data-at-Rest
 But how do you do that actually with data that you send to your future
-self? Which is basically what data-at-rest encryption is. For that we
-have to look how legacy tools do this kind of encryption. With PGP
-(but even with Age) you have a long-term asymmetric key - called in
-our model key-encryption-key (KEK) - which is used to encrypt a
-symmetric key - called the data-encryption-key (DEK) - which (grand
-surprise!) is used to encrypt the data. In klutshnik the KEK is shared
-among all the KMS and only used in an Oblivious Pseudo-random Function
+self? This is basically what data-at-rest encryption is. Encryption tools like PGP or Age use a static model:
+1. A random symmetric key used to encrypt the actual data. In Klutshnik, this is called the DEK (Data Encryption Key).
+2. A long-term asymmetric key which is used to encrypt the DEK. In Klutshnik, this is called the KEK (Key Encryption Key).
+
+The generic flow is: $EncryptedFile = Encrypt(Data, DEK) + Encrypt(DEK, KEK)$.
+
+The main issue with this model is that the KEK is static. If someone steals your PGP private key, they can decrypt every file you ever saved (no Forward Secrecy) and every file you save in the future (no Post-Compromise Security) until you manually re-encrypt everything.
+
+** The Solution: Oblivious Key Rotation
+In Klutshnik, the KEK is shared among all the KM servers and only used in an Oblivious Pseudo-Random Function
 (OPRF) as a key to derive the DEK. Using an OPRF allows us to update
 the KEK without having to decrypt the DEK with the old KEK and
-re-encrypt with the new KEK (as would be the case with PGP/AGE, if
-they would support such a thing, but with those you would completely
-have to decrypt the file, and encrypt it with a new DEK).
+re-encrypt with the new KEK. If PGP or AGE were to support this, they 
+would need to decrypt the file, and re-encrypt it with the new DEK.
+
+Klutshnik allows you to rotate your KEK without ever downloading or decrypting the data. It provides forward secrecy since old backup tapes cannot be decrypted with today's keys. It also provides post-compromise security since if your device is hacked, you run a meaningful key rotation and the attacker's stolen key becomes useless for future data access.
 
 ** Post-quantum and Harvest now, decrypt later
 
-With data-in-transit a adversary can just store all the encrypted
-messages and the various other protocol related data which is used for
-key calculation and store it until this adversary has the capability
+With data-in-transit, an adversary can just store all the encrypted
+messages and the various other protocol-related data used for
+key calculation. Adversaries can store it until they have the capability
 to break the calculation with a powerful attack (like post-quantum
 computers, but also other so far undiscovered attacks) to be deployed
 in the future. Since the data-in-transit goes over the internet,
 anywhere on that path is sufficient for the adversary to harvest.
 
-With data-at-rest this is quite different. Without access to the KEK
+With data-at-rest, this is quite different. Without access to the KEK,
 the ciphertext is well protected and probably resistant to any
-post-quantum attack (hence adversaries looking for `~/.gnupg` and
-similar assets). The threat of Harvest-now-decrypt-later and
-quantum-cryptanalysis is much less prevalent, since data-at-rest is
-not traversing the internet at nodes harvested by adversaries (or if
-then it is probably encrypted with an additional layer of (hopefully
-pq-safe) data-in-transit encryption).
+post-quantum attack. Hence, adversaries would be looking for config files like `~/.gnupg` and
+similar assets to harvest.
+The threat of harvest-now-decrypt-later and
+quantum cryptanalysis is much less prevalent, since data-at-rest is
+not traversing the internet at servers harvested by adversaries. 
+If it is, then it is probably encrypted with an additional layer of (hopefully
+post-quantum-safe) data-in-transit encryption.
 
 * Self-hosted and Free Software
 
 Klutshnik is completely open source.
 
-You can host your own server for complete control, or use public
-servers with confidence knowing they can't access your data. See the
+You can host your own server for complete control, or use public servers with confidence knowing they can't access your data. See the
 [[file:server_install.org][server installation guide]] for more details on how to set up your own
 server.
 
-Klutshnik code is open source and available on GitHub:
+Klutshnik code is available on GitHub:
 - **Reference implementation**: https://github.com/stef/klutshnik
 - **Microcontroller version**: https://github.com/stef/klutshnik-zephyr
 
 * Getting Started
 
-** Try Klutshnik
+You need a client and access to a few servers.
 
-To use Klutshnik, you need a client and a few servers.
-1. **Self-host**:
-    - Follow our [[file:server_install.org][server installation guide]]
-    - Follow our [[file:server_install.org][device installation guide]]
-2. [[file:client_install.org][Install a Klutshnik client]]
+1.  **Install the Client:**
+    Follow the [[file:client_install.org][Client Installation Guide]].
+
+2.  **Find or Host Servers:**
+    -   Use [[file:servers.org][Public Servers]]
+    -   [[file:server_install.org][Run your own Server]]
+    -   [[file:device_install.org][Build your own Hardware Token]]
 
 * Acknowledgements
 

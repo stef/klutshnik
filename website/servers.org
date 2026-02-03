@@ -1,4 +1,4 @@
-#+TITLE: Server-list - Klutshnik Key-Management System
+#+TITLE: Server-list - klutshnik Key Management System
 #+AUTHOR: klutshnik
 #+OPTIONS:   H:2 num:t toc:nil \n:nil @:t ::t |:t ^:t -:t f:t *:t <:t
 #+OPTIONS:   TeX:t LaTeX:t skip:nil d:nil todo:t pri:nil tags:not-in-toc
@@ -20,7 +20,11 @@
 
 * Public Servers
 
-List of public Klutshnik servers
+Klutshnik relies on a distributed network of key management servers.
+You can choose to host your own private servers for maximum
+control, or utilize existing public servers for a lower barrier to
+entry. Because the protocol is oblivious, public servers can never
+access your private data or passwords.
 
 |----------------+------+------------------------------------------------------------------+------------------------------------------------+-----------------------------|
 | hostname       | port | onion url                                                        | long-term signature pubkey                     | website                     |
@@ -32,5 +36,5 @@ List of public Klutshnik servers
 If you operate a reliable Klutshnik server and want to make it available
 to the community, consider reaching out to the project maintainers and
 we can add it here. Community-operated servers strengthen the
-overall KPHINX ecosystem by providing more options for threshold configurations
+overall Klutshnik ecosystem by providing more options for threshold configurations
 and reducing centralization.
