@@ -1,6 +1,6 @@
 # NAME
 
-klutshnik - command-line client for an updatable threshold KMS system
+klutshnik - Klutshnik KMS command-line client
 
 # SYNOPSIS
 
@@ -32,7 +32,7 @@ klutshnik - command-line client for an updatable threshold KMS system
 
 # DESCRIPTION
 
-klutshnik is a CLI client for an updatable threshold Key Management
+`klutshnik` is a CLI client for an updatable threshold Key Management
 System (KMS) protocol. In this system, the client interacts with a group
 of KM (Key Management) servers to derive cryptographic keys without any single entity
 ever possessing the full secret. This architecture is designed to
@@ -48,7 +48,7 @@ The most important aspects are:
 - **Efficient Rotation:** Rotating the KEKs does not require downloading or re-encrypting the underlying data.
 - **Zero-knowledge Updates:** Updating the KEKs can be done by untrusted storage without learning anything.
 
-klutshnik is based on established cryptographic research, notably "Updatable
+Klutshnik is based on established cryptographic research, notably "Updatable
 Oblivious Key Management for Storage Systems" by Stanislaw Jarecki,
 Hugo Krawczyk, and Jason Resch (https://eprint.iacr.org/2019/1275)
 
@@ -61,9 +61,9 @@ For information on configuring Klutshnik, see the man page
 
 ### Long-term signing key (ltsigkey)
 
-Klutshnik uses EdDSA long-term signing keys for authentication towards
+`klutshnik` uses EdDSA long-term signing keys for authentication towards
 the key management servers. This key can be stored on disk and referenced in the `klutshnik.cfg(5)` config file.
-Alternatively, Klutshnik can
+Alternatively, `klutshnik` can
 take the client long-term signing key on the standard input.
 
 Note: When decrypting a file, the long-term signing key (if provided on

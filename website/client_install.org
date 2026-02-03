@@ -1,4 +1,4 @@
-#+TITLE: Clients - klutshnik Key Management System
+#+TITLE: Clients - Klutshnik Key Management System
 #+AUTHOR: klutshnik
 #+OPTIONS:   H:2 num:t toc:nil \n:nil @:t ::t |:t ^:t -:t f:t *:t <:t
 #+OPTIONS:   TeX:t LaTeX:t skip:nil d:nil todo:t pri:nil tags:not-in-toc
@@ -18,7 +18,7 @@
 <hr />
 #+END_EXPORT
 
-The klutshnik client is your gateway to secure data storage and key management.
+The ~klutshnik~ client is your gateway to secure data storage and key management.
 
 All cryptographic operations happen locally on your device, ensuring your data never leaves your device in plaintext. The client talks to these servers using a **Verifiable Oblivious Pseudo-Random Function (VOPRF)** protocol (based on [[https://datatracker.ietf.org/doc/rfc9497/][RFC 9497]]), allowing them to help you unlock your data without ever learning your secrets.
 
@@ -36,7 +36,7 @@ This is the fastest way to get started.
 apt install klutshnik
 #+END_SRC
 
-This installs the complete Klutshnik client with all dependencies
+This installs the complete ~klutshnik~ client with all dependencies
 resolved automatically. After installation, proceed to the
 configuration section below.
 
@@ -80,8 +80,8 @@ sudo PREFIX=/usr make install
 cd ..
 #+END_SRC
 
-** 4. Install the Klutshnik client
-With the dependencies in place, install the Python Klutshnik client:
+** 4. Install the ~klutshnik~ client
+With the dependencies in place, install the Python ~klutshnik~ client:
 #+BEGIN_SRC sh
 python3 -m virtualenv --copies --system-site-packages env
 source env/bin/activate
@@ -102,7 +102,7 @@ system-wide defaults with user-specific overrides.
 
 ** Configuration File Locations
 
-Klutshnik reads configuration files in this specific order, with later
+~klutshnik~ reads configuration files in this specific order, with later
 files overriding earlier settings:
 
 1. ~/etc/klutshnik/config~ - System-wide configuration
@@ -155,7 +155,7 @@ In the ~[client]~ section, you can configure the following parameters:
 - *~verbose~*: Controls the logging detail.  You probably want to keep
   on ~false~ if everything works, and only temporarily enable it to
   debug issues
-- *~keystore~*: Specifies where Klutshnik caches some non-sensitive
+- *~keystore~*: Specifies where ~klutshnik~ caches some non-sensitive
   key-related metadata. The default location should be good enough in
   most deployments.
 - *~threshold~*: The number of servers required to reconstruct your key. Setting ~threshold~ to 1

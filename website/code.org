@@ -1,4 +1,4 @@
-#+TITLE: Source Code & Repositories - klutshnik Key Management System
+#+TITLE: Source Code & Repositories - Klutshnik Key Management System
 #+AUTHOR: klutshnik
 #+OPTIONS:   H:2 num:t toc:nil \n:nil @:t ::t |:t ^:t -:t f:t *:t <:t
 #+OPTIONS:   TeX:t LaTeX:t skip:nil d:nil todo:t pri:nil tags:not-in-toc
@@ -24,12 +24,12 @@ The Klutshnik ecosystem is open source and maintained across several
 repositories. Below are links to the main components:
 
 - *Main Client/Server:*
-  The central repository for the Klutshnik CLI and daemon.
+  The central repository for the ~klutshnik~ CLI and ~klutshnikd~ daemon.
   https://github.com/stef/klutshnik or alternatively on Radicle:
   rad:zogkw4qiTrH7rKVa89BrKo8z5miA
 
 - *Klutshnik Zephyr:*
-  The firmware for running a Klutshnik server on small embedded devices.
+  The firmware for running a ~klutshnikd~ server on small embedded devices.
   https://github.com/stef/klutshnik-zephyr or alternatively on Radicle:
   rad:z2EBBi4vui98QV8Mk8DT3c25yZbJ4
 

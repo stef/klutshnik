@@ -106,13 +106,13 @@ certificates or those not signed by a Certificate Authority (CA) that your syste
 
 ### LTSIGKEY
 
-The path to the server's public long-term signing key. You need to get this from the klutshnik server's operator. If you are running your
+The path to the server's public long-term signing key. You need to get this from the Klutshnik server's operator. If you are running your
 own server, see `klutshnikd(8)` for how to obtain this value.
 
 ### NOISEKEY
 
 The path to the server's public long-term Noise key, used for secure
-authenticated communication. You need to get this from the klutshnik server's operator. If you are running your
+authenticated communication. You need to get this from the Klutshnik server's operator. If you are running your
 own server, see `klutshnikd(8)` for how to obtain this value.
 
 # SECURITY CONSIDERATIONS

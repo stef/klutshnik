@@ -1,6 +1,6 @@
 # NAME
 
-klutshnikd - klutshnik Key Management System (KMS) daemon
+klutshnikd - Klutshnik Key Management System (KMS) daemon
 
 # SYNOPSIS
 
@@ -8,7 +8,7 @@ klutshnikd - klutshnik Key Management System (KMS) daemon
 
 # DESCRIPTION
 
-klutshnikd is the server-side component of the Klutshnik Key Management
+`klutshnikd` is the server-side component of the Klutshnik Key Management
 System (KMS) protocol. It provides a secure, sharded environment for
 managing cryptographic keys using a threshold architecture. In this
 system, no single server ever holds a complete key; instead, a threshold
@@ -29,7 +29,7 @@ The most important aspects are:
 - **Efficient Rotation:** Rotating the KEKs does not require downloading or re-encrypting the underlying data.
 - **Zero-knowledge Updates:** Updating the KEKs can be done by untrusted storage without learning anything.
 
-klutshnikd is based on established cryptographic research, notably
+`klutshnikd` is based on established cryptographic research, notably
 "Updatable Oblivious Key Management for Storage Systems" by Stanislaw Jarecki,
 Hugo Krawczyk, and Jason Resch (https://eprint.iacr.org/2019/1275)
 
@@ -53,11 +53,11 @@ The server exits after this.
 
 # Regular Operation
 
-The klutshnikd server runs in the foreground and emits log messages to standard output. If
+The `klutshnikd` server runs in the foreground and emits log messages to standard output. If
 you want to run it as a daemon, you should deploy it using service supervision
 tools such as s6 (https://skarnet.org/software/s6/), runit (https://smarden.org/runit/) or daemontools (https://cr.yp.to/daemontools.html).
 
-The klutshnikd server does not take any parameters on the command
+The `klutshnikd` server does not take any parameters on the command
 line, but any settings can be overridden by environment
 variables which are the all uppercase configuration variable names
 prefixed with `KLUTSHNIK_`. For example, verbosity can be affected by running:

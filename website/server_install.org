@@ -138,7 +138,7 @@ zig build -Dcpu=baseline -Doptimize=ReleaseSafe -Dpie=true -Drelro=true -Dsystem
 
 ** Privileges & Ports
 
-We recommend running Klutshnik on port 443.
+We recommend running ~klutshnikd~ on port 443.
 This is the standard HTTPS port and is almost never blocked by firewalls (hotels, cafes, corporate wifi).
 
 To allow the server to bind to port 443 without running as ~root~, use ~setcap~:
@@ -185,7 +185,7 @@ For self-signed certificates, you must:
 **** Configuration File Locations
 
 First you need a configuration for your server.
-Klutshnik reads configuration files in this specific order, with later
+~klutshnikd~ reads configuration files in this specific order, with later
 files overriding earlier settings:
 
 1. ~/etc/klutshnikd/config~ - System-wide configuration
@@ -241,7 +241,7 @@ KLUTSHNIK_VERBOSE=true klutshnikd
 ** Running the Server
 
 Once you have configured your TLS certificates and server settings,
-you can start your Klutshnik server.
+you can start ~klutshnikd~.
 
 #+BEGIN_SRC sh
 ./bin/klutshnikd 2>&1 | /usr/bin/ts
@@ -253,7 +253,7 @@ timestamps to each log line. This basic logging setup helps
 with debugging and monitoring, though you may want to implement
 a more sophisticated logging solution for production environments.
 
-** Sandboxing Klutshnikd
+** Sandboxing ~klutshnikd~
 
 Klutshnik includes a simple script for sandboxing the server
 with further sandboxing using seccomp (secure computing mode), a Linux
@@ -262,7 +262,7 @@ can make. This script creates an isolated environment that limits
 the server's access to system resources, reducing the potential
 impact of security vulnerabilities.
 
-To run Klutshnikd in a sandboxed environment:
+To run ~klutshnikd~ in a sandboxed environment:
 
 #+BEGIN_SRC sh
 ./sbox.sh bin/klutshnikd klutshnikd.cfg seccomp/debian-sid-zig-0.15.1.bpf 2>&1 | /usr/bin/ts
@@ -357,19 +357,19 @@ can now be used with the above-mentioned ~sbox.sh~ script.
 
 ** Running in Production
 
-Ideally, you should run the Klutshnik server on a dedicated machine,
+Ideally, you should run ~klutshnikd~ on a dedicated machine,
 with nothing else (except maybe an SSH server), to minimize your attack
 surface.
 
 However, sometimes you don't have this luxury of minimized attack
-surface, and you want to run Klutshnik on a server with other
+surface, and you want to run ~klutshnikd~ on a server with other
 (probably) HTTPS services. You might also want to run a separate webserver for public
-announcements related to your server, like public keys, sample configs, updates and news. We recommend running the Klutshnik server
+announcements related to your server, like public keys, sample configs, updates and news. We recommend running ~klutshnikd~
 on ~kms.yourdomain.tld~ and the related web server on
 ~klutshnik.yourdomain.tld~.
 
 You might be tempted to run Nginx as a reverse proxy in front of
-Klutshnik. **DON'T**. Klutshnik as a protocol cannot be TLS-terminated
+~klutshnikd~. **DON'T**. Klutshnik as a protocol cannot be TLS-terminated
 upstream. Also, if you look at plaintext Klutshnik traffic, all you
 will see is binary data. You will have only lots of ~HTTP/1.1 400 Bad
 Request~ and unhappy users.
@@ -408,7 +408,7 @@ backend bk_ssl_default
 
 In this setup, you should adjust ~10.0.0.10~ to your public IP address
 where you want to run all your services. In the example above, the
-Klutshnik server runs on ~127.0.0.1:2523~ and the other stuff on a
+~klutshnikd~ runs on ~127.0.0.1:2523~ and the other stuff on a
 web server listening on ~127.0.0.1:443~.
 
 If you want your web server to have access to IP addresses of

@@ -1,4 +1,4 @@
-#+TITLE: Hardware Devices - klutshnik Key Management System
+#+TITLE: Hardware Devices - Klutshnik Key Management System
 #+AUTHOR: klutshnik
 #+OPTIONS:   H:4 num:t toc:nil \n:nil @:t ::t |:t ^:t -:t f:t *:t <:t
 #+OPTIONS:   TeX:t LaTeX:t skip:nil d:nil todo:t pri:nil tags:not-in-toc
@@ -69,7 +69,7 @@ For the **Raspberry Pico 2** device, you also need the ~arm-none-eabi~
 cross-compiler toolchain.
 ** 2. Initializing your Zephyr Workspace
 
-[[https://github.com/stef/klutshnik-zephyr][~klutshnik-zephyr~]] is a port of the Klutshnik server to Zephyr OS
+[[https://github.com/stef/klutshnik-zephyr][~klutshnik-zephyr~]] is a port of the ~klutshnikd~ server to Zephyr OS
 
 #+BEGIN_SRC sh
 west init -m https://github.com/stef/klutshnik-zephyr workspace
@@ -261,7 +261,7 @@ socat /dev/ttyACM0,b115200,raw,echo=0 -,escape=0x0f
 
 ** 3. Run tests
 In a third terminal, run the test suite. This simulates a client performing a full key rotation cycle involving your hardware device. For this, you need to [[file:client_install.org][have the
-Klutshnik client installed]] on your path.
+~klutshnik~ client installed]] on your path.
 #+BEGIN_SRC sh
 cd test
 # Clean old keystore

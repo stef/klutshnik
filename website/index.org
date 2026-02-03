@@ -1,4 +1,4 @@
-#+TITLE: klutshnik Key Management System
+#+TITLE: Klutshnik Key Management System
 #+AUTHOR: klutshnik
 #+OPTIONS:   H:2 num:t toc:nil \n:nil @:t ::t |:t ^:t -:t f:t *:t <:t
 #+OPTIONS:   TeX:t LaTeX:t skip:nil d:nil todo:t pri:nil tags:not-in-toc
@@ -111,7 +111,7 @@ Klutshnik code is available on GitHub:
 
 You need a client and access to a few servers.
 
-1.  **Install the Client:**
+1.  **Install the ~klutshnik~ Client:**
     Follow the [[file:client_install.org][Client Installation Guide]].
 
 2.  **Find or Host Servers:**

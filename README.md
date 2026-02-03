@@ -122,10 +122,10 @@ KLCPK-XhIO9gsXc0EJGlFFgLxlpsVE39pk3gRgzKkPg4gbgg0AAAAA9MxKACsmwEEfbMdS4tf8KrYM5h
 # encrypt a message (this one only needs the public key from above)
 % echo "attack at dawn" | klutshnik encrypt KLCPK-XhIO9gsXc0EJGlFFgLxlpsVE39pk3gRgzKkPg4gbgg0AAAAA9MxKACsmwEEfbMdS4tf8KrYM5h/w2FRcAZ0/4pRK0GQ= >/tmp/klutshniked
 
-# decrypt the message (this one needs the key from the klutshnik server)
+# decrypt the message (this one needs the key from the Klutshnik server)
 % klutshnik decrypt </tmp/klutshniked
 
-# update the key on the klutshnik server
+# update the key on the Klutshnik server
 % klutshnik rotate "keyid1"
 KLCPK-XhIO9gsXc0EJGlFFgLxlpsVE39pk3gRgzKkPg4gbgg0AAAABkD+jW5DoYBln2WJQ74gySEWhtM4bxbyJkeDgTcpNLVA=
 KLCDELTA-XhIO9gsXc0EJGlFFgLxlpsVE39pk3gRgzKkPg4gbgg0AAAABk4hPN4VKb6lxeZO0hXEx1e/iGWQvYAIXQvu2pbIrQQQ=
@@ -142,8 +142,9 @@ KLCDELTA-XhIO9gsXc0EJGlFFgLxlpsVE39pk3gRgzKkPg4gbgg0AAAABk4hPN4VKb6lxeZO0hXEx1e/
 
 # add a user that can update keys, but nothing else
 % klutshnik adduser keyid1 13lty/jQszJ1Xn5krTC2kltvPJDMqb4bqk3jgZxR430= update
-the newly authorized client must run:
-klutshnik import "some-keyname" KLTCFG-<long base64 string>
+
+# the newly authorized client must run:
+% klutshnik import "some-keyname" KLTCFG-<long base64 string>
 
 # check that this user has been added
 % klutshnik listusers "keyid1"
