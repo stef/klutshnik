@@ -1,4 +1,4 @@
-#+TITLE: Clients - Klutshnik Key-Management System
+#+TITLE: Clients - Klutshnik Key Management System
 #+AUTHOR: klutshnik
 #+OPTIONS:   H:2 num:t toc:nil \n:nil @:t ::t |:t ^:t -:t f:t *:t <:t
 #+OPTIONS:   TeX:t LaTeX:t skip:nil d:nil todo:t pri:nil tags:not-in-toc
@@ -18,43 +18,37 @@
 <hr />
 #+END_EXPORT
 
-The Klutshnik client is your gateway to your data-at-rest and the
-related key-management.
+The ~klutshnik~ client is your gateway to secure data storage and key management.
 
-The client handles all cryptographic operations locally, ensuring your
-data never leaves your device in plaintext. It communicates with
-Klutshnik servers using a blinded protocol that prevents servers from
-learning anything about your keys or your data.
+All cryptographic operations happen locally on your device, ensuring your data never leaves your device in plaintext. The client talks to these servers using the **Verifiable Oblivious Pseudo-Random Function (VOPRF)** protocol (based on [[https://datatracker.ietf.org/doc/rfc9497/][RFC 9497]]), allowing them to help you unlock your data without ever learning your secrets.
 
 * Installing the Client
 
 ** Package Manager Installation (Recommended)
 
-For most users, installing through your distribution's
-package manager provides the easiest setup.
+This is the fastest way to get started.
 
 *** Debian-Based Systems (Debian, Ubuntu, Kali, Raspbian)
 
-Currently only available in testing and in unstable.
+/Currently available in testing and unstable./
 
 #+BEGIN_SRC sh
 apt install klutshnik
 #+END_SRC
 
-This installs the complete Klutshnik client with all dependencies
+This installs the complete ~klutshnik~ client with all dependencies
 resolved automatically. After installation, proceed to the
 configuration section below.
 
-** Source Installation
+** Building from Source
 
 For systems without package manager support or users wanting the latest
 development version, you can build from source.
 
-*** Install regular dependencies
+*** Install Dependencies
 
 You need to adjust the package names according to your distribution's naming conventions.
 To install on Debian-based systems:
-
 #+BEGIN_SRC sh
 apt install python libsodium libsodium-dev gcc g++
 #+END_SRC
@@ -62,7 +56,9 @@ apt install python libsodium libsodium-dev gcc g++
 *** Install liboprf
 
 liboprf is a library for Oblivious Pseudorandom Functions (OPRFs), including
-support for threshold OPRFs. To install,
+support for threshold OPRFs. An OPRF is a cryptographic protocol that allows a 
+client to get a pseudorandom function of a secret key held by a server, without
+the server learning the secret key. To install, run:
 
 #+BEGIN_SRC sh
 git clone https://github.com/stef/liboprf.git
@@ -74,7 +70,7 @@ cd ../..
 
 *** Install libklutshnik
 
-The cryptographic core is implemented in C, you must install the library:
+libklutshnik is the core C library for Klutshnik. To install, run:
 
 #+BEGIN_SRC sh
 git clone https://github.com/stef/klutshnik.git
@@ -84,25 +80,30 @@ sudo PREFIX=/usr make install
 cd ..
 #+END_SRC
 
-*** Install the klutshnik client
+*** Install the ~klutshnik~ client
 
-With the dependencies in place, install the Python Klutshnik client:
-
+With the dependencies in place, install the Python ~klutshnik~ client:
 #+BEGIN_SRC sh
 python3 -m virtualenv --copies --system-site-packages env
 source env/bin/activate
 pip install klutshnik
 #+END_SRC
 
+*** Verification
+
+Verify the installation was successful:
+#+BEGIN_SRC sh
+klutshnik --version
+#+END_SRC
+
 * Configuring the Client
 
-First, you need a configuration for your client.
 The configuration system uses a hierarchical approach that allows
 system-wide defaults with user-specific overrides.
 
 ** Configuration File Locations
 
-Klutshnik reads configuration files in this specific order, with later
+~klutshnik~ reads configuration files in this specific order, with later
 files overriding earlier settings:
 
 1. ~/etc/klutshnik/config~ - System-wide configuration
@@ -115,10 +116,10 @@ their personal settings.
 
 ** Basic Configuration Template
 
-Create your configuration file using the following template as a
-starting point, which shows all default values. This template assumes
-a minimal setup with 3 klutshnik devices - one TCP, one using
+Copy this into one of the locations above (e.g., ~./klutshnik.cfg~). This template assumes
+a minimal setup with 3 Klutshnik devices - one TCP, one using
 Bluetooth LE and one connected via USB serial port.
+
 
 #+BEGIN_EXAMPLE
 [client]
@@ -126,11 +127,11 @@ verbose = false
 keystore="~/.local/klutshnik/keystore"
 threshold = 3
 #ltsigkey_path="~/.config/klutshnik/client.key"
-ltsigpub="LTSIGPK-<base64 encoded key>
-id_salt="some salt that makes your ids unique"
+ltsigpub="LTSIGPK-<base64 encoded key>"
+id_salt="<GENERATE_A_RANDOM_STRING_HERE>"
 
 [servers]
-[server.klutshnik1]
+[servers.klutshnik1]
 address=klutshnik1.example.com
 port=443
 ltsigkey_path="klutshnik1.pub"
@@ -146,36 +147,31 @@ bleaddr = "C8:2F:CB:83:C0:9D"
 ltsigkey = "<base64 encoded key>"
 device_pk = "<base64 encoded key>"
 client_sk = "<base64 encoded key>"
-
 #+END_EXAMPLE
 
 ** Client Configuration Parameters
 
-- *~verbose~*: Controls the logging detail.  You probably want to keep
-  on ~false~ if everything works, and only temporarily enable it to
+In the ~[client]~ section, you can configure the following parameters:
+
+- *~verbose~*: Controls the logging detail. You probably want to keep
+  it ~false~ if everything works, and only temporarily enable it to
   debug issues
-- *~keystore~*: Specifies where klutshnik caches some non-sensitive
+- *~keystore~*: Specifies where ~klutshnik~ caches some non-sensitive
   key-related metadata. The default location should be good enough in
   most deployments.
-- *~threshold~*: For enhanced security and availability, Klutshnik
-  supports threshold cryptography where multiple servers must
-  participate in password generation. The ~threshold~ parameter sets
-  the minimum number of servers required. Setting ~threshold~ to 1
+- *~threshold~*: The number of servers required to reconstruct your key. Setting ~threshold~ to 1
   uses traditional single-server operation. Values greater than 1
-  require you to configure multiple servers in the ~[servers]~
-  section. You must configure at least ~threshold+1~ servers.
-- *~[servers]~*: This section lists exactly one server if ~threshold~
-  is 1, or at least ~threshold+1~ if greater than 1. You can either
-  host your own servers, or use servers hosted by someone else you
-  trust.
+  require you to configure multiple servers in the ~[servers]~ section, described below.
+  Higher threshold = higher security (attacker needs to compromise more servers) but lower availability (more servers must be online for you to work). You must configure at least ~threshold+1~ servers.
+- *~id_salt~*: This random string is used to generate all key IDs for your records. It has no default and you must set this value. If you lose this value, you will lose access to all your keys.
 
 ** Server Configuration Parameters
 
-Each server consists of the following entries:
+In the ~[servers]~ section, you define your servers.
 
 - Named servers subsection: These names follow the format
-  ~[server.name]~. Choose unique, descriptive names for your server
-  sections like ~[server.primary]~ or ~[server.backup1]~. You can use
+  ~[servers.name]~. Choose unique, descriptive names for your server
+  sections like ~[servers.primary]~ or ~[servers.backup1]~. You can use
   any names you like, but do not change them after they are set.
 - *~ltsigkey~* or *~ltsigkey_path~*: ~ltsigkey~ contains the server's
   long-term signing public key, encoded in base64
@@ -184,39 +180,34 @@ Each server consists of the following entries:
   required for threshold setups.
 
 For TCP based servers over the network:
-
 - *~address~*: Points at the host. This is either an IPv4 or IPv6 IP
   address, or a hostname.
-- *~port~*: Sets the TCP port the server is listening on.
+- *~port~*: Sets the TCP port the server is listening on. Default is 443.
 
-For dedicated Klutshnik Devices on micro-controllers (these values are
+For dedicated Klutshnik devices on microcontrollers (these values are
 automatically added if the device is initialized using the ~klutshnik
-provision~ operation.):
-
+provision~ operation):
 - *~usb_serial~*: The serial number of the USB Serial device. This
-  attribute conflicts with ~bleaddr~, a device can only be either USB
-  or BLE.
+  attribute conflicts with ~bleaddr~, a device can only be either USB or Bluetooth LE (BLE).
 - *~bleaddr~*: The Bluetooth LE MAC address of the device. This
   attribute conflicts with ~usb_serial~, a device can only be either
   USB or BLE.
-- *~device_pk~*: The public Noise key of the device.
-- *~client_sk~*: The dedicated private Noise key of the client
-  associated with the device.
+- *~device_pk~*: The public [[http://noiseprotocol.org][Noise protocol]] key of the device.
+- *~client_sk~*: The dedicated private Noise key of the client associated with the device.
 
 If you are not hosting your own servers, choose servers operated by
-different third parties to maximize security through trust-distribution.
+different third parties to maximize security through trust distribution.
 
-* Initializing the client
+* Initializing the Client
 
-After installing and configuring the Klutshnik client, on its first
-run, you need to initialize it:
+Once configured, initialize your client to generate your master identity keys:
 
 #+BEGIN_SRC sh
 klutshnik init <path-to-klutshnik.cfg>
 #+END_SRC
 
-This creates the ~keystore~ directory and a client master key, the this op
-outputs your long and short public keys. The long one must be added to any
-klutshnik servers ~authorized_keys~ files that you want to use. And this key is
-also needed if you want to be authorized to use klutshnik keys owned by other
+This creates the ~keystore~ directory, a client master key and outputs your long-term signing and short-term public keys. 
+You must add the long-term signing public key to the ~authorized_keys~ file of every server you want to use. This key is
+also needed if you want to be authorized to use Klutshnik keys owned by other
 users.
+

@@ -1,4 +1,4 @@
-#+TITLE: Docs - Klutshnik Key-Management System
+#+TITLE: Documentation & Reference - Klutshnik Key Management System
 #+AUTHOR: klutshnik
 #+OPTIONS:   H:2 num:t toc:nil \n:nil @:t ::t |:t ^:t -:t f:t *:t <:t
 #+OPTIONS:   TeX:t LaTeX:t skip:nil d:nil todo:t pri:nil tags:not-in-toc
@@ -18,52 +18,53 @@
 <hr />
 #+END_EXPORT
 
-Klutshnik uses a client-threshold-server architecture where servers
-perform cryptographic operations on blinded input. The Klutshnik
-protocol only makes sense if the key-management server is located
+Klutshnik operates on a client-threshold-server architecture. In this
+system, your master secret is never stored in one place. Instead, it is
+split into multiple shares and distributed across several independent
+KM (Key Management) servers. To encrypt or decrypt data, the client
+communicates with a minimum number of these servers (the threshold) to
+collectively derive a key.
+
+Security is maintained through a blinded protocol. When you perform
+an operation, the client sends a blinded input (a mathematically masked
+version of your secret) to the servers. This allows the servers to
+process your request without ever seeing your actual password, your
+plaintext data, or the final decryption key.
+
+The Klutshnik protocol only makes sense if the KM server is located
 somewhere other than where you store your ciphertext or operate on
 your plaintext. The client is a command-line tool that provides access
-to all operations to help manage your passwords.
+to all operations to help manage your keys.
 
 * Operations
 
-The Klutshnik client provides the following operations: ~create~,
-~encrypt~, ~decrypt~, ~rotate~, ~refresh~, ~update~, ~adduser~,
-~deluser~, ~listusers~, ~import~, ~provision~, and ~delete~.  See the
-[[./manpages/klutshnik.html][klutshnik(1) manpage]] for how to use these operations.
+The Klutshnik client provides the following operations:
 
-* Man pages
+- *Management:* ~init~ (generate keys), ~create~ (register), ~delete~
+- *User Control:* ~listusers~, ~adduser~, ~deluser~
+- *Cryptographic:* ~encrypt~, ~decrypt~, ~rotate~ (update keys),
+  ~refresh~, ~update~
+- *Provisioning:* ~provision~ (set up hardware), ~import~
 
-- Server: [[./manpages/klutshnikd.html][klutshnikd(1)]]
-- CLI client: [[./manpages/klutshnik.html][klutshnik(1)]]
+For detailed usage, refer to the [[./manpages/klutshnik.html][klutshnik(1) manual]].
+
+* Reference Material
+
+** Man Pages
+- *CLI Client:* [[./manpages/klutshnik.html][klutshnik(1)]]
+- *Server Daemon:* [[./manpages/klutshnikd.html][klutshnikd(8)]]
+
+** Whitepaper
+The [[https://github.com/stef/klutshnik/blob/master/whitepaper.org][Klutshnik whitepaper]] documents the real-world implementation and
+extensions of the underlying protocol.
 
 * Designed by Established Cryptographers
 
-The main functionality is based on the UOKMS construction of the
-[[https://eprint.iacr.org/2019/1275][Updatable Oblivious Key Management for Storage Systems]] by Stanislaw
-Jarecki, Hugo Krawczyk, and Jason Resch
+Klutshnik is built upon established cryptographic research:
 
-The Threshold OPRF is based on: [[https://eprint.iacr.org/2017/363][TOPPSS: Cost-minimal
-Password-Protected Secret Sharing based on Threshold OPRF]] by Stanislaw
-Jarecki, Aggelos Kiayias, Hugo Krawczyk, and Jiayu Xu
-
-Within this, the DKG is based on /R. Gennaro, M. O. Rabin, and
-T. Rabin/. "Simplified VSS and fact-track multiparty computations with
-applications to threshold cryptography" In B.  A. Coan and Y. Afek,
-editors, 17th ACM PODC, pages 101–111. ACM, June / July 1998 and is
-fully [[https://github.com/stef/liboprf/tree/master/docs/stp-dkg.txt][specified in liboprf]].
-
-The key-update is based on: Fig. 2 from "Simplified VSS and fact-track
-multiparty computations with applications to threshold cryptography"
-by R. Gennaro, M. O. Rabin, and T.  Rabin. This is fully
-[[https://github.com/stef/liboprf/tree/master/docs/stp-update.txt][specified in liboprf]].
-
-The files are encrypted using ~crypto_secretbox()~ by [[https://github.com/jedisct1/libsodium][libsodium]], using
-the STREAM construction of [[https://eprint.iacr.org/2015/189]["Online Authenticated-Encryption and its
-Nonce-Reuse Misuse-Resistance"]] by Viet Tung Hoang, Reza Reyhanitabar,
-Phillip Rogaway, and Damian Vizár
-
-* Whitepaper
-
-We have a [[https://github.com/stef/klutshnik/blob/master/whitepaper.org][whitepaper]] documenting how we extended the original UOKMS
-paper mentioned above to make it work in a real world setup.
+- The main key management functionality is based on: [[https://eprint.iacr.org/2019/1275][Updatable Oblivious Key Management for Storage Systems]] by
+  Jarecki, Krawczyk, and Resch.
+- The Threshold OPRF is based on: [[https://eprint.iacr.org/2017/363][TOPPSS: Cost-minimal Password-Protected Secret Sharing based on Threshold OPRF]] by Jarecki, Kiayias, Krawczyk, and Xu.
+- The key generation is based on: [[https://dl.acm.org/doi/10.1145/277697.277716][Simplified VSS and fast-track multiparty computations with applications to threshold cryptography]] by Gennaro, Rabin, and Rabin. It is fully specified in [[https://github.com/stef/liboprf/blob/master/docs/stp-dkg.txt][the liboprf STP DKG whitepaper]]
+- The key update is based on the ~Simple-Mult~ protocol described in: [[https://dl.acm.org/doi/10.1145/277697.277716][Simplified VSS and fast-track multiparty computations with applications to threshold cryptography]] by Gennaro, Rabin, and Rabin. It is fully specified in [[https://github.com/stef/liboprf/blob/master/docs/stp-update.txt][the liboprf STP update whitepaper]]
+- The files are encrypted using ~crypto_secretbox()~ by [[https://github.com/jedisct1/libsodium][libsodium]], using the ~STREAM~ protocol described in: [[https://eprint.iacr.org/2015/189][Online Authenticated-Encryption and its Nonce-Reuse Misuse-Resistance]] by Viet Tung Hoang, Reza Reyhanitabar, Phillip Rogaway, and Damian Vizár

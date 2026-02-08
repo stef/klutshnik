@@ -1,4 +1,4 @@
-#+TITLE: Devices - Klutshnik Key-Management System
+#+TITLE: Hardware Devices - Klutshnik Key Management System
 #+AUTHOR: klutshnik
 #+OPTIONS:   H:4 num:t toc:nil \n:nil @:t ::t |:t ^:t -:t f:t *:t <:t
 #+OPTIONS:   TeX:t LaTeX:t skip:nil d:nil todo:t pri:nil tags:not-in-toc
@@ -21,60 +21,54 @@
 * Klutshnik Devices
 
 Klutshnik devices are tiny dedicated devices that run on a
-micro-controller like an ESP32 or a Cortex-M series ARM. These connect
-either using USB or Bluetooth LE to your computer. They allow you to
-have (some) of your threshold setups requiring close proximity or even
-physical contact with your computer running the client, while at the
-same time they are compartmented and have a minimal attack surface.
+microcontroller like an ESP32 or a Cortex-M series ARM. These connect
+either using USB or Bluetooth LE to your computer.
 
-* Supported Device
+Instead of trusting a server on the internet, you can trust a device in your pocket. It runs the same blinded protocol as a server, meaning even if your computer is compromised, the attacker cannot extract the key share from this hardware device.
+
+* Supported Devices
 
 Klutshnik currently supports the following devices:
+- **Espressif:** Seeedstudio [[https://wiki.seeedstudio.com/xiao_esp32s3_getting_started/][XIAO ESP32 S3]] (USB and BLE)
+- **Raspberry Pi (RPi):** [[https://www.raspberrypi.com/products/raspberry-pi-pico-2/][Pico 2 W]] (USB)
+- **Teensy:** [[https://www.pjrc.com/store/teensy41.html][4.1]] and [[https://www.pjrc.com/store/teensy40.html][4.0]] (USB)
 
- - Seeedstudio [[https://wiki.seeedstudio.com/xiao_esp32s3_getting_started/][xiao​_esp32s3]]
- - Raspberry [[https://www.raspberrypi.com/products/raspberry-pi-pico-2/][Pico 2(W)]]
- - Teensy [[https://www.pjrc.com/store/teensy41.html][4.1]] and [[https://www.pjrc.com/store/teensy40.html][4.0]]
+Currently, only the XIAO ESP32 S3 supports wireless connections using Bluetooth LE (BLE). The other boards can only communicate using USB connections.
 
-Currently only the xiao​_esp32s3 supports wireless connections using
-Bluetooth LE (BLE), the other boards can only communicate using USB
-connections.
-
-Since klutshnik uses [[https://zephyrproject.org/][ZephyrOS]] as the real-time operating system, it
-should be easy to port klutshnik to other boards easily, especially if
-they are based on ESP32s3 or RP2350 micro-controllers, but others
-should also not be too complicated.
-
-As soon as ZephyrOS supports BLE for the RPI Pico 2W this device will
+Since Klutshnik uses [[https://zephyrproject.org/][Zephyr OS]] as the real-time operating system, it
+is possible to port Klutshnik to other boards, especially if
+they are based on the ESP32 S3 or RP2350 microcontrollers.
+As soon as Zephyr OS supports BLE for the RPi Pico 2 W, this device will
 be able to support either USB or BLE.
 
-* Downloading the Firmware
-
-Currently you have to build it yourself.
 
 * Building the Firmware
 
-** Dependencies:
+Currently, you have to build it yourself.
 
+** Dependencies
+
+You need several Python tools and the Zephyr SDK:
 #+BEGIN_SRC sh
 pip install west pyserial tomlkit pyudev pysodium pyoprf
 #+END_SRC
 
 If you target an **ESP32** device you also need the ~xtensa-esp32s3-elf~
-cross-compiler toolchain, and:
+cross-compiler toolchain and the ~esptool~
+tool to flash the device:
 
 #+BEGIN_SRC sh
 pip install esptool
 #+END_SRC
 
-If you target a **teensy** you also need the [[https://www.pjrc.com/teensy/loader_cli.html][teensy loader cli version]] and
+If you target a **Teensy** device, you also need the [[https://www.pjrc.com/teensy/loader_cli.html][Teensy Loader CLI]] and
 the ~arm-none-eabi~ cross-compiler toolchain.
 
-For the **Raspberry Pico2** you need the ~arm-none-eabi~
-cross-compiler toolchain. Furthermore - until this [[https://github.com/zephyrproject-rtos/zephyr/pull/83346][PR]] is merged - you
-need this [[https://github.com/xudongzheng/zephyr/commit/4c3c8b23ccdd81106d6444199feb45c9b8c2055a.patch][patch]] to get the RNG working. You need to apply this in the
-~zephyr~ directory.
+For the **Raspberry Pico 2** device, you also need the ~arm-none-eabi~
+cross-compiler toolchain.
+** Initializing your Zephyr Workspace
 
-** Initializing your zephyr workspace
+[[https://github.com/stef/klutshnik-zephyr][~klutshnik-zephyr~]] is a port of the ~klutshnikd~ server to Zephyr OS
 
 #+BEGIN_SRC sh
 west init -m https://github.com/stef/klutshnik-zephyr workspace
@@ -84,12 +78,9 @@ west blobs fetch hal_espressif hal_infineon
 cd klutshnik-zephyr
 #+END_SRC
 
-You need the hal_espressif blobs for the esp32s3 based builds, and the
-hal_infineon blobs for the raspberry pico 2w based builds.
+** Building the Image
 
-** Building the images
-
-If you are building for the **xiao​_esp32s3**:
+*XIAO ESP32 S3  (BLE + USB):*
 #+BEGIN_SRC sh
 FILE_SUFFIX=ble \
    ZEPHYR_TOOLCHAIN_VARIANT=cross-compile \
@@ -97,17 +88,16 @@ FILE_SUFFIX=ble \
    west build -p auto -b xiao_esp32s3/esp32s3/procpu klutshnik -DCONFIG_KLUTSHNIK_BLE=y
 #+END_SRC
 
-And if you are building for the **teensy 4.x**:
+*For Teensy 4.x (USB):*
 #+BEGIN_SRC sh
 FILE_SUFFIX=uart \
    ZEPHYR_TOOLCHAIN_VARIANT=cross-compile \
    CROSS_COMPILE=/usr/bin/arm-none-eabi- \
    west build -p auto -b teensy41 klutshnik -DCONFIG_KLUTSHNIK_USB_CDC=y
 #+END_SRC
+Replace ~teensy41~ with ~teensy40~ where appropriate.
 
-replace ~teensy41~ with ~teensy40~ where appropriate.
-
-Building for the Raspberry Pico2:
+*For Raspberry Pico 2 (USB):*
 #+BEGIN_SRC sh
 FILE_SUFFIX=uart \
    ZEPHYR_TOOLCHAIN_VARIANT=cross-compile \
@@ -115,115 +105,127 @@ FILE_SUFFIX=uart \
    west build -p auto -b rpi_pico2/rp2350a/m33 klutshnik -DCONFIG_KLUTSHNIK_USB_CDC=y
 #+END_SRC
 
-** Flashing the images
 
-Flashing - assuming your **xiao​_esp32s3** is connected via USB and mapped to /dev/ttyACM0:
+** Flashing the Images
 
+*XIAO ESP32 S3 :*
+First, connect your device via USB. Then, flash the image:
 #+BEGIN_SRC sh
+# Find your port (usually /dev/ttyACM0)
 west flash --esp-device=/dev/ttyACM0
 #+END_SRC
+Just omit the ~--esp-device~ param and it will auto-probe for the right port, though it will be a bit slower.
 
-Just omit the ~--esp-device~ param and it will auto-probe, though it will be a bit slower.
+*For Teensy 4.x:*
+If you have the Teensy CLI loader:
 
-With a **teensy** it's simpler - if you have the teensy cli loader,
-and the same for the RPI Pico2 (but it obviously doesn't even need the
-teensy cli loader):
+#+BEGIN_SRC sh
+west flash
+#+END_SRC
 
+*For Raspberry Pico 2:*
 #+BEGIN_SRC sh
 west flash
 #+END_SRC
 
 * Provisioning a new device
 
-Before using your klutshnik device, you must provision it. This is
-done by connecting your device via USB (yes also your BLE
-xiao​_esp32s3) and running:
+Before using your Klutshnik device, you must provision it. 
+First, connect your device via USB (even for the BLE XIAO ESP32 S3).
+
+** Initialize Identity
+
+This command generates an identity for the device and authorizes your client to communicate with it initially.
 
 #+BEGIN_SRC sh
 klutshnik provision /dev/ttyACM0 test/klutshnik.cfg test/servers/authorized_keys uart
 #+END_SRC
 
-however if you use an ESP32s3 based device:
+However, if you use an ESP32 S3-based device, you must use the ~esp~ mode:
 
 #+BEGIN_SRC sh
 klutshnik provision /dev/ttyACM0 test/klutshnik.cfg test/servers/authorized_keys esp
 #+END_SRC
 
-The ~/dev/ttyACM0~ value is a default, you can leave it out, if your
-device is connected to this port. The other two can also be real
-configuration files, not only test configs. However make sure that the
-~authorized_keys~ file contains all other devices already you want to
+The ~/dev/ttyACM0~ value is a default port, and you should replace it with the actual port your device is connected to.
+~test/klutshnik.cfg~ is a test config file. You can replace it with your own config file.
+Make sure that the
+~authorized_keys~ file contains all the other devices you already have that you want to
 use.
 
-At the end of the provisioning the script outputs a value, that needs
-to be added to the ~authorized_keys~ file of all the other klutshnik
-servers in the setup you want to use. In the test-case appending this
-to the file ~test/servers/authorized_keys~ should do the trick.
+** Update Authorized Keys
+
+At the end of the provisioning, the script outputs a value. You must add this string to the ~authorized_keys~ file of every other Klutshnik server in your threshold group.
+
+This authorization ensures your hardware device can participate in collective
+key rotations with other servers. For the local test environment, append
+this string to the ~test/servers/authorized_keys~ file.
 
 * Manual Device Configuration
 
 The ~klutshnik provision~ operations should get you all set up. But if
-you later have to do some reconfiguration - klutshnik-zephyr comes
-with a USB UART shell that allows you to do this manually. For
-klutshnik devices that use USB for communication, there is always two
-serial ports created the first is the management port with the shell
-and the log, and the second port is always the klutshnik protocol
-port. So if you have both ~/dev/ttyACM0~ and ~/dev/ttyACM1~ then the
-shell is on ~/dev/ttyACM0~
+you later have to do some reconfiguration, ~klutshnik-zephyr~ comes with a USB UART shell that allows you to do this manually. 
+
+For
+Klutshnik devices that use USB for communication, there are two serial ports:
+1.  The management port with the shell and the log.
+2.  The protocol port, the actual key management interface.
+If you have both ~/dev/ttyACM0~ and ~/dev/ttyACM1~, then the
+shell is on ~/dev/ttyACM0~.
+
+
+** Supported Commands
 
 The following commands are supported:
 
-Set the owners client ltsig public key (currently unused):
-
+To set the owner's client long-term signing public key:
 #+BEGIN_SRC sh
-init ltsig <base64 ltsig pubkey
+init ltsig <base64 ltsig pubkey>
 #+END_SRC
 
-Set the owners client noise public key (also currently unused):
-
+To set the owner's client Noise public key:
 #+BEGIN_SRC sh
-init noise <base64 ltsig pubkey>
+init noise <base64 noise pubkey>
 #+END_SRC
 
-Check if the initial provisioning is complete (init ltsig/noise done,
-and at least 3 entries in the authorized_keys file):
+For initial provisioning to be completed, you must run the above two ~init~ commands, and have at least 3 entries in the ~authorized_keys~ file. To check completion, run:
 
 #+BEGIN_SRC sh
 init check
 #+END_SRC
 
-Add a new entry to the ~authorized_keys~ file:
 
+To add a new entry to the ~authorized_keys~ file:
 #+BEGIN_SRC sh
 authkey add <base64 authkey entry>
 #+END_SRC
 
-Delete the ~authorized_keys~ file:
+To delete the ~authorized_keys~ file:
 
 #+BEGIN_SRC sh
 authkey del
 #+END_SRC
 
-Get the contents of the ~authorized_keys~ file:
+To get the contents of the ~authorized_keys~ file:
 
 #+BEGIN_SRC sh
 authkey get
 #+END_SRC
 
-Get the devices ltsig public key:
+To get the device's long-term signing key:
 
 #+BEGIN_SRC sh
 getcfg ltsig
 #+END_SRC
 
-Get the devices noise public key:
+To get the device's Noise protocol public key:
 
 #+BEGIN_SRC sh
 getcfg noise
 #+END_SRC
 
-Get the devices MAC - if the device uses Bluetooth LE as the
-communication layer:
+To get the device's Bluetooth MAC address (for BLE devices only):
+
 
 #+BEGIN_SRC sh
 getcfg mac
@@ -231,25 +233,22 @@ getcfg mac
 
 * Testing
 
-The git repo ships a configured 5-way setup in ~test/~ with one HW device.
+The repository ships with a configured 5-way test setup in the ~test/~ directory. It runs 5 servers including a hardware device.
 
-** Running the other servers
-
-You need to have ~klutshnikd~ available for the TLS-based servers, run
-this in a separate terminal:
-
+** Start Test Servers
+Run the provided test servers (TLS-based) in a separate terminal:
 #+BEGIN_SRC sh
 cd test/servers
 rm -rf */data
-ORACLE=<path/to/klutshnikd> ./start-servers.sh
+# Point ORACLE to your compiled klutshnikd binary
+ORACLE=../../server/bin/klutshnikd ./start-servers.sh
 #+END_SRC
 
-** Running the tests
+** (Optional) Monitor the device logs
 
-As soon as you have the servers running. Power up your BLE device
-using USB, optionally you can start monitoring the log of this device
-using (assuming the device is available on ~/dev/ttyACM0~:
-
+As soon as you have the servers running, power up your BLE device
+using USB. In a second terminal, you can monitor the device logs by
+running (assuming the device is available on ~/dev/ttyACM0~):
 #+BEGIN_SRC sh
 west espressif monitor -p /dev/ttyACM0
 #+END_SRC
@@ -259,11 +258,13 @@ or you could just use plain old socat
 socat /dev/ttyACM0,b115200,raw,echo=0 -,escape=0x0f
 #+END_SRC
 
-Finally you can start running the tests, for this you need to have the
-klutshnik client installed on your path (python virtual env suffices):
 
+** Run tests
+In a third terminal, run the test suite. This simulates a client performing a full key rotation cycle involving your hardware device. For this, you need to [[file:client_install.org][have the
+~klutshnik~ client installed]] on your path.
 #+BEGIN_SRC sh
 cd test
+# Clean old keystore
 rm -rf otherclient/keystore/[0-9a-f]*
 ./test.sh
 #+END_SRC
