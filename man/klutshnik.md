@@ -6,19 +6,19 @@ klutshnik - Klutshnik KMS command-line client
 
      klutshnik init <configfile>
 
-     klutshnik create  <keyname> [<ltsigkey>] <pk>
+     klutshnik create <keyname> [<ltsigkey>] <pk>
 
      klutshnik encrypt <pk> <plaintext> <ciphertext>
 
      klutshnik decrypt [<ltsigkey>] <ciphertext> <plaintext>
 
-     klutshnik rotate  <keyname> [<ltsigkey>] <pk-and-delta>
+     klutshnik rotate <keyname> [<ltsigkey>] <pk-and-delta>
 
      klutshnik refresh <keyname> [<ltsigkey>] <pk>
 
-     klutshnik delete  <keyname> [<ltsigkey>]
+     klutshnik delete <keyname> [<ltsigkey>]
 
-     klutshnik update  <delta>  <files2update>
+     klutshnik update <delta> <files2update>
 
      klutshnik adduser <keyname> <b64_pubkey> <permissions> [<ltsigkey>]
 
@@ -76,7 +76,7 @@ setup in a most secure manner.
 
 Key IDs are arbitrary strings used to identify your records.
 Internally, these names are hashed using the `id_salt` from the
-configurations `[client]` section into a unique key identifier.
+configuration's `[client]` section into a unique key identifier.
 Given that this `id_salt` is necessary for accessing your records,
 it is strongly recommended to use a unique salt and maintain a secure backup of
 this value. If you use a commonly-used `id_salt` (such as the default
@@ -146,7 +146,7 @@ klutshnik rotate <keyname> [<ltsigkey>] >pubkey-and-delta
 ```
 
 Generates a new epoch for the specified key.
-If your long-term signing key is not in the configuration (see klutshnik.cfg(5)),
+If your long-term signing key is not in the configuration (see `klutshnik.cfg(5)`),
 it must be provided on standard input.
 The output of this operation is:
 
@@ -169,7 +169,7 @@ and the previous key.
 klutshnik update <delta> <files2update>
 ```
 
-Applies an delta update token (generated from the `klutshnik rotate`
+Applies a delta update token (generated from the `klutshnik rotate`
 operation) to a list of files. This operation does not
 require a long-term signing key. It can be done offline, without
 connectivity to the key management servers.
@@ -187,7 +187,7 @@ klutshnik refresh <keyname> [<ltsigkey>] >pk
 ```
 
 Updates the client's local cache with the latest metadata.
-The following metadata are refreshed, and each clients should run this operation to refresh their local copy of:
+The following metadata are refreshed; each client should run this operation to refresh their local copy of:
 
 - the public key
 - the current epoch

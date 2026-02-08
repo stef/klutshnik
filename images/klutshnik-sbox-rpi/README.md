@@ -22,7 +22,7 @@ ARCH=aarch64 ./build_image.sh
 
 The output lands in `./output/sdcard.img.gz`.
 
-Setting the `ARCH` variable effects which RPi versions the image will run on:
+Setting the `ARCH` variable affects which RPi versions the image will run on:
 
 | Board                                     | armhf | armv7 | aarch64 |
 | ----------------------------------------- | :---: | :---: | :-----: |
@@ -56,7 +56,7 @@ You can access the device via serial console or SSH. The default credentials are
 - Username: `root`
 - Password: `klutshnik`
 
-**Change the password immediately after first login:**
+**Change the password immediately after first login.**
 
 Furthermore, you should either disable SSH (if you want
 only serial port access), or upload your SSH key to

@@ -11,10 +11,10 @@ original academic paper [UOKMS].
 Klutshnik is a tool for encrypting files. It comes with two major
 innovations:
 
-   1. threshold setup: the decryption key is split among a number of
+   1. Threshold setup: the decryption key is split among a number of
       untrusted servers, of which only a fraction (the threshold) is
       needed to decrypt your files.
-   2. forward secrecy/post-compromise security: the key can be regularly
+   2. Forward secrecy/post-compromise security: the key can be regularly
       updated, while the update of the encrypted files can be done
       very cheaply by an untrusted storage server, without
       re-encrypting the files, and thus without the storage server
@@ -150,7 +150,7 @@ header consisting of:
 
 The following op-codes are currently defined in version 0 of the protocol:
 
-#+BEGIN_SRC
+#+BEGIN_SRC c
 CREATE  = 0,
 UPDATE  = 0x33,
 REFRESH = 0x55,
@@ -199,7 +199,7 @@ the key can create/modify a list of long-term signing public keys and
 the associated permissions. The format of this list is very simple,
 each entry is:
 
-#+BEGIN_SRC zig
+#+BEGIN_SRC c
   pk: [crypto_sign_PUBLICKEYBYTES]u8,
   perm: KlutshnikPermission,
 #+END_SRC
@@ -207,7 +207,7 @@ each entry is:
 where ~KlutshnikPermission~ is a byte with the following bits and
 their associated permission:
 
-#+BEGIN_SRC
+#+BEGIN_SRC c
       OWNER   = 1,
       DECRYPT = 2,
       UPDATE  = 4,
@@ -346,7 +346,7 @@ the owner to add/delete other users of this key, set their
 permissions, and also list the current list of authorizations.
 
 Since only the owner (creator) of the record can add/delete or list
-items in the list of authorizations, there no need to send the
+items in the list of authorizations, there is no need to send the
 long-term signing public key.
 
 Authorization administration requests carry only one byte of payload,
@@ -380,5 +380,5 @@ every 64KB
  - [UOKMS] The main key management functionality is based on the Updatable Oblivious KMS (UOKMS) protocol described in: "Updatable Oblivious Key Management for Storage Systems" by Stanislaw Jarecki, Hugo Krawczyk, and Jason Resch (https://eprint.iacr.org/2019/1275).
  - The Threshold OPRF is based on: "TOPPSS: Cost-minimal Password-Protected Secret Sharing based on Threshold OPRF" by Stanislaw Jarecki, Aggelos Kiayias, Hugo Krawczyk, and Jiayu Xu (https://eprint.iacr.org/2017/363).
  - [STP-DKG] The distributed key generation (DKG) is based on: "Simplified VSS and fast-track multiparty computations with applications to threshold cryptography" by R. Gennaro, M. O. Rabin, and T. Rabin (https://dl.acm.org/doi/10.1145/277697.277716). A full protocol specification is available in the liboprf documentation: https://github.com/stef/liboprf/blob/master/docs/stp-dkg.txt.
- - [STP-UPDATE] The key update protocol is based on the `Simple-Mult` protocol described in: "Simplified VSS and fast-track multiparty computations with applications to threshold cryptography" by R. Gennaro, M. O. Rabin, and T. Rabin. A full protocol specification of is available in the liboprf documentation: https://github.com/stef/liboprf/blob/master/docs/stp-update.txt.
+ - [STP-UPDATE] The key update protocol is based on the ~Simple-Mult~ protocol described in: "Simplified VSS and fast-track multiparty computations with applications to threshold cryptography" by R. Gennaro, M. O. Rabin, and T. Rabin. A full protocol specification is available in the liboprf documentation: https://github.com/stef/liboprf/blob/master/docs/stp-update.txt.
  - The files are encrypted using ~crypto_secretbox()~ from libsodium (https://github.com/jedisct1/libsodium), following the STREAM protocol described in: "Online Authenticated-Encryption and its Nonce-Reuse Misuse-Resistance" by Viet Tung Hoang, Reza Reyhanitabar, Phillip Rogaway, and Damian Vizár (https://eprint.iacr.org/2015/189).

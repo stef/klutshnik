@@ -27,7 +27,7 @@
 
 A core innovation of Klutshnik is rotating the Key Encryption Key (KEK) without decrypting the data.
 
-This is possible because the Data Encryption Key (DEK) is not a static file, but the output of an Oblivious Pseudo-Random Function (OPRF). An OPRF is a two-party protocol where a client (holding an input ~w~) and a server (holding a secret key ~KEK~) interact such that the client computes the output ~DEK~, but the server learns nothing about the client's input ~w~ and the client learns nothing about the server's secret ~KEK~. In a threshold OPRF, the key ~KEK~ is split among a number (threshold) of servers, such that the compromise of any individual server does not compromise the key.
+This is possible because the Data Encryption Key (DEK) is not a static file, but the output of an Oblivious Pseudorandom Function (OPRF). An OPRF is a two-party protocol where a client (holding an input ~w~) and a server (holding a secret key ~KEK~) interact such that the client computes the output ~DEK~, but the server learns nothing about the client's input ~w~ and the client learns nothing about the server's secret ~KEK~. In a threshold OPRF, the key ~KEK~ is split among a number (threshold) of servers, such that the compromise of any individual server does not compromise the key.
 
 In a non-threshold setting:
 - ~KEK~: Held by the server.
@@ -54,12 +54,10 @@ The server then shares $\delta_{i}$ with the untrusted storage server. The stora
    $w_{i+1} = \frac{w_{i}}{\delta_{i}}$
 #+END_CENTER
 
-Because of the algebraic properties, the resulting DEK remains identical, even though both the KEK and the input ~w~ have changed:
+Because of the algebraic properties, the resulting DEK remains identical, even though both the KEK and the input ~w~ have changed.
 
-#+BEGIN_CENTER
-   $DEK = w_1 \cdot KEK_1 = w_0 \cdot KEK_0$
-
-   $\frac{w_0}{\delta_{0}} \cdot KEK_0 \cdot \delta_{0}$
+The mathematical relationship is:
+   $DEK = w_1 \cdot KEK_1 = w_0 \cdot KEK_0 = \frac{w_0}{\delta_{0}} \cdot KEK_0 \cdot \delta_{0}$
 #+END_CENTER
 
 ** Threshold Rotation
@@ -84,7 +82,7 @@ in the 2HashDH OPRF.
 
 * What's with this weird name Klutshnik?
 
-It is a homage to the all the great cryptographers having a
+It is a homage to all the great cryptographers having a
 Polish/Slavic background. 'kljutsh' (or variations of it) means "key"
 in Slavic languages, and the 'nik' postfix means something like
 "person" just like in Beatnik. Together, they mean "person of keys" or

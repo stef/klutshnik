@@ -11,4 +11,4 @@ Klutshnik:
  - stores absolutely no private data.
 
 This package provides the CLI client for this system. For more information, please
-see the man page at https://klutshnik.info/manpages/klutshnik.html
+see the man page at [[https://klutshnik.info/manpages/klutshnik.html][klutshnik(1)]].

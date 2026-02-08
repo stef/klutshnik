@@ -2,9 +2,9 @@
 
 Hello my name is Klyoovtuokmshnik, Styepanovich Klyoovtuokmshnik - but
 my friends call me "Klutshnik" (Narrator: let me interject for a
-moment, What you are referring to as Klutshnik, is in fact,
+moment. What you are referring to as Klutshnik, is in fact,
 GNU/Klutshnik, or as I've recently taken to calling it, GNU plus
-Klutshnik)
+Klutshnik.)
 
 **Klutshnik** is a key management system for encrypting data at rest. It splits encryption keys across multiple servers so that no single server ever holds a complete key.
 
@@ -66,7 +66,7 @@ So, in a nutshell:
 You should install the following dependencies:
 
 - [`libsodium`](https://libsodium.org/) and [pysodium](https://pypi.org/project/pysodium) for the cryptography primitives
-- [`liboprf`](https://github.com/stef/liboprf) for supporting for Threshold Oblivious Pseudorandom Functions (OPRFs), the protocol that makes this all work.
+- [`liboprf`](https://github.com/stef/liboprf) for support of Threshold Oblivious Pseudorandom Functions (OPRFs), the protocol that makes this all work.
 - `Zig` to build the server.
 
 To install `liboprf`:
@@ -169,12 +169,12 @@ the format encrypted files.
 
 # References
 
-- The main key management functionality is based on: [[https://eprint.iacr.org/2019/1275][Updatable Oblivious Key Management for Storage Systems]] by
+- The main key management functionality is based on: [Updatable Oblivious Key Management for Storage Systems](https://eprint.iacr.org/2019/1275) by
   Jarecki, Krawczyk, and Resch.
-- The Threshold OPRF is based on: [[https://eprint.iacr.org/2017/363][TOPPSS: Cost-minimal Password-Protected Secret Sharing based on Threshold OPRF]] by Jarecki, Kiayias, Krawczyk, and Xu.
-- The key generation is based on: [[https://dl.acm.org/doi/10.1145/277697.277716][Simplified VSS and fast-track multiparty computations with applications to threshold cryptography]] by Gennaro, Rabin, and Rabin. It is fully specified in [[https://github.com/stef/liboprf/blob/master/docs/stp-dkg.txt][the liboprf STP DKG whitepaper]]
-- The key update is based on the `Simple-Mult` protocol described in: [[https://dl.acm.org/doi/10.1145/277697.277716][Simplified VSS and fast-track multiparty computations with applications to threshold cryptography]] by Gennaro, Rabin, and Rabin. It is fully specified in [[https://github.com/stef/liboprf/blob/master/docs/stp-update.txt][the liboprf STP update whitepaper]]
-- The files are encrypted using `crypto_secretbox()` by [[https://github.com/jedisct1/libsodium][libsodium]], using the `STREAM` protocol described in: [[https://eprint.iacr.org/2015/189][Online Authenticated-Encryption and its Nonce-Reuse Misuse-Resistance]] by Viet Tung Hoang, Reza Reyhanitabar, Phillip Rogaway, and Damian Vizár
+- The Threshold OPRF is based on: [TOPPSS: Cost-minimal Password-Protected Secret Sharing based on Threshold OPRF](https://eprint.iacr.org/2017/363) by Jarecki, Kiayias, Krawczyk, and Xu.
+- The key generation is based on: [Simplified VSS and fast-track multiparty computations with applications to threshold cryptography](https://dl.acm.org/doi/10.1145/277697.277716) by Gennaro, Rabin, and Rabin. It is fully specified in [the liboprf STP DKG whitepaper](https://github.com/stef/liboprf/blob/master/docs/stp-dkg.txt).
+- The key update is based on the `Simple-Mult` protocol described in: [Simplified VSS and fast-track multiparty computations with applications to threshold cryptography](https://dl.acm.org/doi/10.1145/277697.277716) by Gennaro, Rabin, and Rabin. It is fully specified in [the liboprf STP update whitepaper](https://github.com/stef/liboprf/blob/master/docs/stp-update.txt).
+- The files are encrypted using `crypto_secretbox()` by [libsodium](https://github.com/jedisct1/libsodium), using the `STREAM` protocol described in: [Online Authenticated-Encryption and its Nonce-Reuse Misuse-Resistance](https://eprint.iacr.org/2015/189) by Viet Tung Hoang, Reza Reyhanitabar, Phillip Rogaway, and Damian Vizár
 
 ## Funding
 

@@ -29,13 +29,12 @@ Security is maintained through a blinded protocol. When you perform
 an operation, the client sends a blinded input (a mathematically masked
 version of your secret) to the servers. This allows the servers to
 process your request without ever seeing your actual password, your
-plaintext data, or the final decryption key. 
+plaintext data, or the final decryption key.
 
-The Klutshnik
-protocol only makes sense if the KM server is located
+The Klutshnik protocol only makes sense if the KM server is located
 somewhere other than where you store your ciphertext or operate on
 your plaintext. The client is a command-line tool that provides access
-to all operations to help manage your passwords.
+to all operations to help manage your keys.
 
 * Operations
 
@@ -67,5 +66,5 @@ Klutshnik is built upon established cryptographic research:
   Jarecki, Krawczyk, and Resch.
 - The Threshold OPRF is based on: [[https://eprint.iacr.org/2017/363][TOPPSS: Cost-minimal Password-Protected Secret Sharing based on Threshold OPRF]] by Jarecki, Kiayias, Krawczyk, and Xu.
 - The key generation is based on: [[https://dl.acm.org/doi/10.1145/277697.277716][Simplified VSS and fast-track multiparty computations with applications to threshold cryptography]] by Gennaro, Rabin, and Rabin. It is fully specified in [[https://github.com/stef/liboprf/blob/master/docs/stp-dkg.txt][the liboprf STP DKG whitepaper]]
-- The key update is based on the `Simple-Mult` protocol described in: [[https://dl.acm.org/doi/10.1145/277697.277716][Simplified VSS and fast-track multiparty computations with applications to threshold cryptography]] by Gennaro, Rabin, and Rabin. It is fully specified in [[https://github.com/stef/liboprf/blob/master/docs/stp-update.txt][the liboprf STP update whitepaper]]
-- The files are encrypted using `crypto_secretbox()` by [[https://github.com/jedisct1/libsodium][libsodium]], using the `STREAM` protocol described in: [[https://eprint.iacr.org/2015/189][Online Authenticated-Encryption and its Nonce-Reuse Misuse-Resistance]] by Viet Tung Hoang, Reza Reyhanitabar, Phillip Rogaway, and Damian Vizár
+- The key update is based on the ~Simple-Mult~ protocol described in: [[https://dl.acm.org/doi/10.1145/277697.277716][Simplified VSS and fast-track multiparty computations with applications to threshold cryptography]] by Gennaro, Rabin, and Rabin. It is fully specified in [[https://github.com/stef/liboprf/blob/master/docs/stp-update.txt][the liboprf STP update whitepaper]]
+- The files are encrypted using ~crypto_secretbox()~ by [[https://github.com/jedisct1/libsodium][libsodium]], using the ~STREAM~ protocol described in: [[https://eprint.iacr.org/2015/189][Online Authenticated-Encryption and its Nonce-Reuse Misuse-Resistance]] by Viet Tung Hoang, Reza Reyhanitabar, Phillip Rogaway, and Damian Vizár

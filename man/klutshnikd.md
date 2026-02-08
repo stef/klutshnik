@@ -12,7 +12,7 @@ klutshnikd - Klutshnik Key Management System (KMS) daemon
 System (KMS) protocol. It provides a secure, sharded environment for
 managing cryptographic keys using a threshold architecture. In this
 system, no single server ever holds a complete key; instead, a threshold
-of sers must collaborate to perform cryptographic operations.
+of servers must collaborate to perform cryptographic operations.
 
 In this system, the `client` interacts with a KMS
 that securely and efficiently stores secret key material, in
@@ -35,7 +35,7 @@ Hugo Krawczyk, and Jason Resch (https://eprint.iacr.org/2019/1275)
 
 Detailed configuration options are documented in `klutshnikd.cfg(5)`.
 
-# Initializiation
+# Initialization
 
 ```sh
 klutshnikd init

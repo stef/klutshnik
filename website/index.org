@@ -57,7 +57,7 @@ For data-in-transit (messaging), we have **Forward Secrecy (FS)** and **Post-Com
 properties (PCS & FS) are achieved by generating new ephemeral keys for every message. If a key is stolen, the attacker can strip that one message, but they can't decrypt previous messages (FS) and future messages (PCS).
 
 *** Data-at-Rest
-But how do you do that actually with data that you send to your future
+But how do you actually do that with data that you send to your future
 self? This is basically what data-at-rest encryption is. Encryption tools like PGP or Age use a static model:
 1. A random symmetric key used to encrypt the actual data. In Klutshnik, this is called the DEK (Data Encryption Key).
 2. A long-term asymmetric key which is used to encrypt the DEK. In Klutshnik, this is called the KEK (Key Encryption Key).
@@ -71,7 +71,7 @@ In Klutshnik, the KEK is shared among all the KM servers and only used in an Obl
 (OPRF) as a key to derive the DEK. Using an OPRF allows us to update
 the KEK without having to decrypt the DEK with the old KEK and
 re-encrypt with the new KEK. If PGP or AGE were to support this, they 
-would need to decrypt the file, and re-encrypt it with the new DEK.
+would need to decrypt the file and re-encrypt it with the new DEK.
 
 Klutshnik allows you to rotate your KEK without ever downloading or decrypting the data. It provides forward secrecy since old backup tapes cannot be decrypted with today's keys. It also provides post-compromise security since if your device is hacked, you run a meaningful key rotation and the attacker's stolen key becomes useless for future data access.
 
@@ -91,7 +91,7 @@ post-quantum attack. Hence, adversaries would be looking for config files like `
 similar assets to harvest.
 The threat of harvest-now-decrypt-later and
 quantum cryptanalysis is much less prevalent, since data-at-rest is
-not traversing the internet at servers harvested by adversaries. 
+not traversing the internet through servers harvested by adversaries. 
 If it is, then it is probably encrypted with an additional layer of (hopefully
 post-quantum-safe) data-in-transit encryption.
 

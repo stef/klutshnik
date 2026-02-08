@@ -46,7 +46,7 @@ be able to support either USB or BLE.
 
 Currently, you have to build it yourself.
 
-** 1. Dependencies
+** Dependencies
 
 You need several Python tools and the Zephyr SDK:
 #+BEGIN_SRC sh
@@ -62,12 +62,11 @@ pip install esptool
 #+END_SRC
 
 If you target a **Teensy** device, you also need the [[https://www.pjrc.com/teensy/loader_cli.html][Teensy Loader CLI]] and
-the ~arm-none-eabi~ cross-compiler toolchain.   
-~arm-none-eabi~ cross-compiler toolchain.
+the ~arm-none-eabi~ cross-compiler toolchain.
 
 For the **Raspberry Pico 2** device, you also need the ~arm-none-eabi~
 cross-compiler toolchain.
-** 2. Initializing your Zephyr Workspace
+** Initializing your Zephyr Workspace
 
 [[https://github.com/stef/klutshnik-zephyr][~klutshnik-zephyr~]] is a port of the ~klutshnikd~ server to Zephyr OS
 
@@ -79,7 +78,7 @@ west blobs fetch hal_espressif hal_infineon
 cd klutshnik-zephyr
 #+END_SRC
 
-** 3. Building the Image
+** Building the Image
 
 *XIAO ESP32 S3  (BLE + USB):*
 #+BEGIN_SRC sh
@@ -107,7 +106,7 @@ FILE_SUFFIX=uart \
 #+END_SRC
 
 
-** 4. Flashing the Images
+** Flashing the Images
 
 *XIAO ESP32 S3 :*
 First, connect your device via USB. Then, flash the image:
@@ -134,7 +133,7 @@ west flash
 Before using your Klutshnik device, you must provision it. 
 First, connect your device via USB (even for the BLE XIAO ESP32 S3).
 
-** Step 1: Initialize Identity
+** Initialize Identity
 
 This command generates an identity for the device and authorizes your client to communicate with it initially.
 
@@ -148,15 +147,15 @@ However, if you use an ESP32 S3-based device, you must use the ~esp~ mode:
 klutshnik provision /dev/ttyACM0 test/klutshnik.cfg test/servers/authorized_keys esp
 #+END_SRC
 
-The ~/dev/ttyACM0~ value is a default port, and you should replace it with the actual port your device is connected to. 
-~test/klutshnik.cfg~ is a test config file, you can replace it with your own config file. 
+The ~/dev/ttyACM0~ value is a default port, and you should replace it with the actual port your device is connected to.
+~test/klutshnik.cfg~ is a test config file. You can replace it with your own config file.
 Make sure that the
-~authorized_keys~ file contains all other devices already you want to
+~authorized_keys~ file contains all the other devices you already have that you want to
 use.
 
-** Step 2: Update Authorized Keys
+** Update Authorized Keys
 
-At the end of the provisioning, the script outputs a value. you must add this string to the ~authorized_keys~ file of every other Klutshnik server in your threshold group.
+At the end of the provisioning, the script outputs a value. You must add this string to the ~authorized_keys~ file of every other Klutshnik server in your threshold group.
 
 This authorization ensures your hardware device can participate in collective
 key rotations with other servers. For the local test environment, append
@@ -165,7 +164,7 @@ this string to the ~test/servers/authorized_keys~ file.
 * Manual Device Configuration
 
 The ~klutshnik provision~ operations should get you all set up. But if
-you later have to do some reconfiguration,  ~klutshnik-zephyr~ comes with a USB UART shell that allows you to do this manually. 
+you later have to do some reconfiguration, ~klutshnik-zephyr~ comes with a USB UART shell that allows you to do this manually. 
 
 For
 Klutshnik devices that use USB for communication, there are two serial ports:
@@ -234,9 +233,9 @@ getcfg mac
 
 * Testing
 
-The repository ships with a configured 5-way test setup in the ~test/~ directory. It runs 5 servers on hardware device. 
+The repository ships with a configured 5-way test setup in the ~test/~ directory. It runs 5 servers including a hardware device.
 
-** 1. Start Test Servers
+** Start Test Servers
 Run the provided test servers (TLS-based) in a separate terminal:
 #+BEGIN_SRC sh
 cd test/servers
@@ -245,8 +244,9 @@ rm -rf */data
 ORACLE=../../server/bin/klutshnikd ./start-servers.sh
 #+END_SRC
 
-** 2. (Optional) Monitor the device logs
-As soon as you have the servers running. Power up your BLE device
+** (Optional) Monitor the device logs
+
+As soon as you have the servers running, power up your BLE device
 using USB. In a second terminal, you can monitor the device logs by
 running (assuming the device is available on ~/dev/ttyACM0~):
 #+BEGIN_SRC sh
@@ -259,7 +259,7 @@ socat /dev/ttyACM0,b115200,raw,echo=0 -,escape=0x0f
 #+END_SRC
 
 
-** 3. Run tests
+** Run tests
 In a third terminal, run the test suite. This simulates a client performing a full key rotation cycle involving your hardware device. For this, you need to [[file:client_install.org][have the
 ~klutshnik~ client installed]] on your path.
 #+BEGIN_SRC sh

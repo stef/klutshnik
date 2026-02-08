@@ -20,7 +20,7 @@
 
 * Overview
 
-The **Klutshnik** server (~klutshnikd~) is a KM (Key Management) server. 
+The Klutshnik server (~klutshnikd~) is a KM (Key Management) server. 
 The server is responsible for protecting the
 key shares, managing operations on them and related maintenance and
 admin functions.
@@ -35,7 +35,7 @@ This is the easiest way to run a server. We provide ready-to-use OS [[https://gi
 newer]] based on the latest Alpine Linux release. They come
 pre-configured with proper Seccomp BPF sandboxing.
 
-*** 1. Flash the Image
+*** Flash the Image
 
 #+BEGIN_SRC sh
 gzip -dc output/sdcard.img.gz >sdcard.img
@@ -43,25 +43,24 @@ gzip -dc output/sdcard.img.gz >sdcard.img
 sudo dd if=sdcard.img of=/dev/mmcblk0
 #+END_SRC
 
-*** 2. First Boot Setup
+*** First Boot Setup
 
 The Raspberry Pi image self-initializes at the first boot. This means it
 generates keys, self-signed certificates and a Seccomp BPF sandboxing
 ruleset.
 
 You can either connect via a serial port, or SSH into the Raspberry Pi using
-root and Klutshnik password, which you should change
+the root and Klutshnik password, which you should change
 immediately. Furthermore, you should either disable SSH (if you want
 only serial port access), or upload your SSH key to
 ~/root/.ssh/authorized_keys~ and disable SSH password logins.
 
-
-The image generates a self-signed certificate at `/etc/klutshnik/cert.pem`. For local or VPN use, this is fine. If you prefer proper TLS certificates, the image has ~acme.sh~,
+The image generates a self-signed certificate at ~/etc/klutshnik/cert.pem~. For local or VPN use, this is fine. If you prefer proper TLS certificates, the image has ~acme.sh~,
 ~acme-tiny~ and ~certbot~ pre-installed.
 
-*** 3. Add to Your Client Config
+*** Add to Your Client Config
 
-Before using your new Klutshnik  Raspberry Pi, you need to add the device to
+Before using your new Klutshnik Raspberry Pi, you need to add the device to
 your Klutshnik client config. The following template needs to be
 completed and added to your ~klutshnik.cfg~ file's ~[servers]~ section:
 
@@ -85,7 +84,7 @@ ltsigkey="<public ltsigkey>"
 Both the self-signed ~cert.pem~ and the ~ltsigkey~ are presented to you
 when you login to the device via the serial console or SSH.
 
-*** 4. Setting Up authorized_keys
+*** Setting Up ~authorized_keys~
 
 To use the new device in a threshold setup with other
 Klutshnik servers, they need to trust each other.
@@ -114,7 +113,7 @@ Your onion address will appear in: ~/var/lib/tor/klutshnik/hostname~.
 
 ** Prerequisites
 
-1. You need **Zig v0.15.x**. You can install from the package manager of your distro if it has Zig or from https://ziglang.org/download/.
+1. You need **Zig v0.15.x**. You can install from the package manager of your distro if it has Zig or from [[https://ziglang.org/download/][ziglang.org]].
 2. You need ~libsodium-dev~ (Debian/Ubuntu) or ~libsodium~ (macOS/Homebrew). Ensure ~sodium.pc~ exists in your pkgconfig path (~/usr/share/pkgconfig/~). Zig sometimes struggles to find it in non-standard locations.
 
 ** Build Steps
@@ -180,9 +179,7 @@ For self-signed certificates, you must:
   - Copy ~ssl_cert.pem~ to each client machine
   - Set the ~ssl_cert~ variable in client config to point to this file
 
-*** Configuration
-
-**** Configuration File Locations
+*** Configuration File Locations
 
 First you need a configuration for your server.
 ~klutshnikd~ reads configuration files in this specific order, with later
@@ -196,7 +193,7 @@ files overriding earlier settings:
 This hierarchy allows global defaults while letting users customize
 their personal settings.
 
-**** Basic Configuration Template
+*** Basic Configuration Template
 
 The content of the configuration files should be according to the following
 example (showing all default values):
@@ -216,7 +213,7 @@ record_salt = "some natrium-chloride"
 authorized_keys="/pathto/authorized_keys"
 #+END_EXAMPLE
 
-**** Configuration Parameter Guide
+*** Configuration Parameter Guide
 - *~address~*: Determines on what address your server is listening. Set to ~"::"~ to listen on all IPv4 and IPv6 interfaces, or specific IP for restricted access
 - *~port~*: Sets the port your server is listening on. We recommend using port 443 if available, since it is usually used for web servers and would help when the server is being accessed from behind tight firewalls
 - *~ssl_key~* & *~ssl_cert~*: Required. Have no defaults, and must be set to paths to your TLS credentials. Without them, the server will not run
@@ -224,9 +221,9 @@ authorized_keys="/pathto/authorized_keys"
 - *~max_kids~*: Configures the number of worker processes serving requests.
 - *~datadir~*: Points at the root directory where all data is stored. Backup this directory regularly and securely, since the loss of this directory means users lose access to their keys (or at least shares of them)
 - *~verbose~*: Makes the server print information to standard output. This can be helpful for debugging
-- *~ltsigkey~*: The path pointing to the long-term signing private key. You can create one by running ~server init~. This will also create a public key and its base64 encoded variant, which should be published to all potential users so that they can use your server in a threshold setup. If running a public server, establish an online presence (static webpage, social media, etc.) to publish your public key
+- *~ltsigkey~*: The path pointing to the long-term signing private key. You can create one by running ~klutshnikd init~. This will also create a public key and its base64 encoded variant, which should be published to all potential users so that they can use your server in a threshold setup. If running a public server, establish an online presence (static webpage, social media, etc.) to publish your public key
 - *~record_salt~*: A random string that makes the ids unique from other KM servers, providing weak unlinkability between client IDs and local IDs.
-- *~authorized_keys~*: a path to a file, which stores the keypairs of all other clients and KM servers that are allowed to access this server.
+- *~authorized_keys~*: A path to a file which stores the public keys of all other clients and KM servers that are allowed to access this server.
 
 The server supports overriding any of these config variables by
 setting environment variables. The name of the environment variable is
@@ -273,7 +270,7 @@ To run ~klutshnikd~ in a sandboxed environment:
 The sandboxed environment has several limitations you should be
 aware of:
 - Your configuration file format becomes more strict in the sandboxed environment. The config file **MUST NOT** contain spaces around the equals signs (=), as the sandbox script sources the file directly and spaces will cause parsing failures.
-- During the configuration loading process, you may see one harmless error or warning message about the `[server]` section header, which can be safely ignored.
+- During the configuration loading process, you may see one harmless error or warning message about the ~[server]~ section header, which can be safely ignored.
 
 *** Creating Custom Seccomp Profiles
 
@@ -376,7 +373,7 @@ Request~ and unhappy users.
 
 Instead, use a Server Name Indication (SNI) based routing proxy like [[https://github.com/stef/snifer][snifer]] or [[http://www.haproxy.org/][HAProxy]]. The following is an example HAProxy config:
 
-#+BEGIN_SRC
+#+BEGIN_SRC conf
 defaults
   timeout client 30s
   timeout server 30s
@@ -420,7 +417,7 @@ repo.
 
 This assures users that they cannot be tracked by you based on IP addresses.
 
-#+BEGIN_SRC
+#+BEGIN_SRC conf
 HiddenServiceDir /var/lib/tor/klutshnik/
 HiddenServicePort 443 127.0.0.1:4443
 #+END_SRC

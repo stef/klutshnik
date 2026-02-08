@@ -25,17 +25,17 @@ repositories. Below are links to the main components:
 
 - *Main Client/Server:*
   The central repository for the ~klutshnik~ CLI and ~klutshnikd~ daemon.
-  https://github.com/stef/klutshnik or alternatively on Radicle:
+  https://github.com/stef/klutshnik, or alternatively on Radicle:
   rad:zogkw4qiTrH7rKVa89BrKo8z5miA
 
 - *Klutshnik Zephyr:*
-  The firmware for running a ~klutshnikd~ server on small embedded devices.
-  https://github.com/stef/klutshnik-zephyr or alternatively on Radicle:
+  The firmware for running a Klutshnik server on small embedded devices.
+  https://github.com/stef/klutshnik-zephyr, or alternatively on Radicle:
   rad:z2EBBi4vui98QV8Mk8DT3c25yZbJ4
 
 - *Core OPRF library (RFC9497[fn:0] compliant):*
   The cryptographic library providing Oblivious Pseudorandom Functions.
-  https://github.com/stef/liboprf or alternatively on Radicle:
+  https://github.com/stef/liboprf, or alternatively on Radicle:
   rad:z3P9keM4KFAMp8wZuULi71VS7cWwp
 
 [fn:0] [[https://datatracker.ietf.org/doc/rfc9497/][RFC 9497: Oblivious Pseudorandom Functions (OPRFs) Using Prime-Order Groups]]

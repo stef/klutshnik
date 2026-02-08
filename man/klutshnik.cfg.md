@@ -16,7 +16,7 @@ The client looks for configuration files in the following order:
 
 The configuration file format is TOML.
 
-## `[Client]` SECTION
+## `[client]` SECTION
 
 This section configures general client behavior.
 

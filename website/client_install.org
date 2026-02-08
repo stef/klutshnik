@@ -20,7 +20,7 @@
 
 The ~klutshnik~ client is your gateway to secure data storage and key management.
 
-All cryptographic operations happen locally on your device, ensuring your data never leaves your device in plaintext. The client talks to these servers using a **Verifiable Oblivious Pseudo-Random Function (VOPRF)** protocol (based on [[https://datatracker.ietf.org/doc/rfc9497/][RFC 9497]]), allowing them to help you unlock your data without ever learning your secrets.
+All cryptographic operations happen locally on your device, ensuring your data never leaves your device in plaintext. The client talks to these servers using the **Verifiable Oblivious Pseudo-Random Function (VOPRF)** protocol (based on [[https://datatracker.ietf.org/doc/rfc9497/][RFC 9497]]), allowing them to help you unlock your data without ever learning your secrets.
 
 * Installing the Client
 
@@ -45,18 +45,18 @@ configuration section below.
 For systems without package manager support or users wanting the latest
 development version, you can build from source.
 
+*** Install Dependencies
 
-** 1. Install Dependencies
 You need to adjust the package names according to your distribution's naming conventions.
 To install on Debian-based systems:
 #+BEGIN_SRC sh
 apt install python libsodium libsodium-dev gcc g++
 #+END_SRC
 
-** 2. Install liboprf
+*** Install liboprf
 
 liboprf is a library for Oblivious Pseudorandom Functions (OPRFs), including
-support for threshold OPRFs. An OPRF is a cryptographic protocol that allows
+support for threshold OPRFs. An OPRF is a cryptographic protocol that allows a 
 client to get a pseudorandom function of a secret key held by a server, without
 the server learning the secret key. To install, run:
 
@@ -68,7 +68,7 @@ sudo PREFIX=/usr make install
 cd ../..
 #+END_SRC
 
-** 3. Install libklutshnik
+*** Install libklutshnik
 
 libklutshnik is the core C library for Klutshnik. To install, run:
 
@@ -80,7 +80,8 @@ sudo PREFIX=/usr make install
 cd ..
 #+END_SRC
 
-** 4. Install the ~klutshnik~ client
+*** Install the ~klutshnik~ client
+
 With the dependencies in place, install the Python ~klutshnik~ client:
 #+BEGIN_SRC sh
 python3 -m virtualenv --copies --system-site-packages env
@@ -152,8 +153,8 @@ client_sk = "<base64 encoded key>"
 
 In the ~[client]~ section, you can configure the following parameters:
 
-- *~verbose~*: Controls the logging detail.  You probably want to keep
-  on ~false~ if everything works, and only temporarily enable it to
+- *~verbose~*: Controls the logging detail. You probably want to keep
+  it ~false~ if everything works, and only temporarily enable it to
   debug issues
 - *~keystore~*: Specifies where ~klutshnik~ caches some non-sensitive
   key-related metadata. The default location should be good enough in
@@ -162,7 +163,7 @@ In the ~[client]~ section, you can configure the following parameters:
   uses traditional single-server operation. Values greater than 1
   require you to configure multiple servers in the ~[servers]~ section, described below.
   Higher threshold = higher security (attacker needs to compromise more servers) but lower availability (more servers must be online for you to work). You must configure at least ~threshold+1~ servers.
-- *~id_salt~*: This random string is used generate all key IDs for your records. It has no default and you must set this value. If you lose this value, you will lose access to all your keys.
+- *~id_salt~*: This random string is used to generate all key IDs for your records. It has no default and you must set this value. If you lose this value, you will lose access to all your keys.
 
 ** Server Configuration Parameters
 
@@ -191,8 +192,8 @@ provision~ operation):
 - *~bleaddr~*: The Bluetooth LE MAC address of the device. This
   attribute conflicts with ~usb_serial~, a device can only be either
   USB or BLE.
-- *~device_pk~*: The public [Noise protocol](http://noiseprotocol.org) key of the device.
-- *~client_sk~*: The dedicated private Noise key of the client  associated with the device.
+- *~device_pk~*: The public [[http://noiseprotocol.org][Noise protocol]] key of the device.
+- *~client_sk~*: The dedicated private Noise key of the client associated with the device.
 
 If you are not hosting your own servers, choose servers operated by
 different third parties to maximize security through trust distribution.
