@@ -1,35 +1,32 @@
 * Klutshnik Whitepaper
 
-In this document we describe the Klutshnik system, we specify the
+In this document, we describe the Klutshnik system. We specify the
 format of data exchanged during the protocol runs and the format of
 the data stored persistently. We describe extensions, like
-authentication and authorization which were out of scope in the
-original academic paper[fn:UOKMS].
-
-[fn:UOKMS] "Updatable Oblivious Key Management for Storage Systems" by Stanislaw
-Jarecki, Hugo Krawczyk, and Jason Resch https://eprint.iacr.org/2019/1275
+authentication and authorization, which were out of scope in the
+original academic paper [UOKMS].
 
 ** About Klutshnik
 
 Klutshnik is a tool for encrypting files. It comes with two major
 innovations:
 
-   1. threshold setup: the decryption key is split among a number of
+   1. Threshold setup: the decryption key is split among a number of
       untrusted servers, of which only a fraction (the threshold) is
       needed to decrypt your files.
-   2. forward secrecy/post-comprise security: the key can be regularly
+   2. Forward secrecy/post-compromise security: the key can be regularly
       updated, while the update of the encrypted files can be done
       very cheaply by an untrusted storage server, without
-      reencrypting the files, and thus without the storage server
-      compromising the confidentality of the file.
+      re-encrypting the files, and thus without the storage server
+      compromising the confidentiality of the file.
 
-It must be noted, that this system provides confidentiality, and does
-not trust neither the key-share holders, nor the storage server in
-that regard. However integrity, and availability (up to the threshold)
-are expected to be provided by these servers.
+It must be noted that this system provides confidentiality and trusts
+neither the key-share holders nor the storage server in that
+regard. However, integrity and availability (up to the threshold) are
+expected to be provided by these servers.
 
-Thus Klutshnik is a verifiable threshold updatable oblivious Key
-Management System (KMS) for data-at rest. It is based on:
+Thus, Klutshnik is a verifiable threshold updatable oblivious Key
+Management System (KMS) for data-at-rest. It is based on:
 
 "Updatable Oblivious Key Management for Storage Systems" by Stanislaw
 Jarecki, Hugo Krawczyk, and Jason Resch https://eprint.iacr.org/2019/1275
@@ -57,30 +54,27 @@ with the KMS for data encryption (only decryption by the client
 requires such communication).
 #+END_QUOTE
 
-** Threatmodel
+** Threat Model
 
 *** Roles
 
 Apart from an adversary - entities are interacting by assuming one of
 the following roles:
 
-  - KM server, a device with a very small attack surface that can
+  - Key Management (KM) server: A device with a very small attack surface that can
     handle key material securely.
-  - user/client whose data is encrypted with keys at the KMS's and
-    ciphertexts stored at the
-  - untrusted but reliable storage server (in this case reliable means
-    data will not be corrupted, the storage will not intentionally DoS
-    the client)
+  - User/client: The entity whose data is encrypted with keys at the KM servers and
+    ciphertexts stored at the storage server.
+  - Storage server: Untrusted but reliable storage server. In this case, "reliable" means data will not be corrupted, and the storage will not intentionally DoS the client.
 
 *** Assets
 
-In klutshnik the following assets exist:
+In Klutshnik, the following assets exist:
 
- - Most importantly the encrypted data itself.
- - The data-encryption key(s) (DEK), used for encrypting the data.
- - The key-encryption key(s) (KEK) protecting the encrypted
-   data-encryption keys (DEK).
- - The shares of the KEK stored at the KMS's.
+ - Most importantly, the encrypted data itself.
+ - The Data Encryption Key(s) (DEK), used for encrypting the data.
+ - The Key Encryption Key(s) (KEK) protecting the encrypted Data Encryption Keys (DEK).
+ - The shares of the KEK stored at the KM servers.
  - The long-term signing private key of the owner of the KEK,
    controlling authorization over this KEK.
  - Long-term signing keys of other authorized clients.
@@ -93,59 +87,57 @@ The KMS protects the shares of the key by means of minimized attack
 surface, compartmentalization, strict access controls and auditable
 event logs.
 
-Storage server is untrusted. With the following exceptions:
- - we trust the StS not to DoS the user, by corrupting, deleting, or otherwise
-   denying access to the correctly encrypted data.
- - we trust the StS to keep the delta update tokens for a key rotation private
-   and after updating the files, to delete this diligently.
+The storage server is untrusted. With the following exceptions:
+ - we trust the storage server not to DoS the user, by corrupting, deleting, or otherwise denying access to the correctly encrypted data.
+ - we trust the storage server to keep the delta update tokens for a key rotation private and after updating the files, to delete this diligently.
 
 The client protects their long-term signing key diligently.
 
-Communication between the client and the server are protected, for
-example by TLS or equivalent means.
+Communication between the client and the server is protected, for
+example, by TLS or equivalent means.
 
 ** The client/KMS protocol
 
-Most of the functionality in klutshnik requires the client interacting
-with the KMS's. This section describes the protocol between these two
-actors.
+Most of the functionality in Klutshnik requires the client to interact
+with the KM servers. This section describes the protocol between these
+two actors.
 
 *** Client and Server keys
 
-Clients and servers each have a long-term signing key, and a noise key for
+Clients and servers each have a long-term signing key and a Noise protocol key for
 establishing secure connections to each other.
 
 Client to server connections are either protected by NoiseXK channels if the
-server is running on a klutshnik BLE or USB device, or using traditional TLS
+server is running on a Klutshnik Bluetooth LE (BLE) or USB device, or using traditional TLS
 keys when the server is accessed using TCP/IP.
 
-The clients noise and long-term signing key are derived from the client master
+The client's Noise and long-term signing key are derived from the client master
 key:
 
 #+BEGIN_SRC
-ltsig_key = hkdf_sha512_expand(32, mk, "klutshnik client long-term signature key")
-noise_sk =  hkdf_sha512_expand(32, mk, "klutshnik client noise sk")
+ltsig_key = hkdf_sha512_expand(32, mk, "Klutshnik client long-term signature key")
+noise_sk =  hkdf_sha512_expand(32, mk, "Klutshnik client Noise sk")
 #+END_SRC
 
-The ltsig_key is a traditional ed25519 key, and the noise key is an x25519 key.
+The ltsig_key is a traditional Ed25519 key, and the Noise key is an X25519 key.
 
-*** KeyIds
+*** Key IDs
 
-Clients refer to keys using ~key names~; arbitrary strings, internally
+Clients refer to keys using ~key names~, which are arbitrary strings. Internally,
 the creator of a key hashes this ~key name~ using the ~id_salt~ from
-their configuration to generate a unique 32 byte identifier.
+their configuration to generate a unique 32-byte identifier.
 
 #+BEGIN_SRC python
 keyid = hash(cfg.id_salt, key_name)
 #+END_SRC
 
-The KMS's use this identifier to refer to the record storing the share
+The KM servers use this identifier to refer to the record storing the share
 of the key, authorization access controls and other metadata.
 
-The creator client shares their keyid with any other authorized
+The creator client shares their key ID with any other authorized
 clients, so they can address the key themselves.
 
-*** Initial Message header
+*** Initial Message Header
 
 Every interaction between the client and the KMS is initiated by the
 client, who sends the initial request. This message has a common
@@ -153,12 +145,12 @@ header consisting of:
 
   - 1 byte operation code (see below)
   - 1 byte version identifier (value is currently 0),
-  - 32 byte key id.
+  - 32 bytes key ID.
   - payload, size depends on various factors
 
 The following op-codes are currently defined in version 0 of the protocol:
 
-#+BEGIN_SRC
+#+BEGIN_SRC c
 CREATE  = 0,
 UPDATE  = 0x33,
 REFRESH = 0x55,
@@ -170,41 +162,36 @@ MODAUTH = 0xaa,
 The payload after the common header varies from operation to
 operation.
 
-*** Client - Server authentication
+*** Client-Server authentication
 
 Authentication is based on the long-term signing keys of parties. In
 the case of clients authenticating themselves to the server, the
-initial request packet usually includes the clients long-term signing
-public key. There is two exceptions to this:
+initial request packet usually includes the client's long-term signing
+public key. There are two exceptions to this:
 
-  - create requests are not authenticated directly, the public key of
-    the of the client must however be included in the
+  - ~create~ requests are not authenticated directly; the public key
+    of the client must however be included in the
     ~authorized_keys~ file of the server, thus only users whose key is
     known to the servers can create records.
-  - authorization management requests always require the owner (the
-    original creator of the key) long-term signing key, hence it is
+  - authorization management requests always require the owner's (the
+    original creator of the key) long-term signing key. Hence, it is
     not required and thus not included in the initial request.
 
 The server authenticates the client after receiving the initial
-request packet, by sending a 32 byte nonce back to the client. The
+request packet, by sending a 32-byte nonce back to the client. The
 client then has to sign the original request packet followed by the
 server nonce:
 
 #+BEGIN_SRC python
-sig = sign(ltsk, opcode|VERSION|keyid|payload|nonce)
+sig = sign(ltsig_key, opcode|VERSION|keyid|payload|nonce)
 send(sig)
 #+END_SRC
 
-The server receives the signature and - using the public key from the
-initial request payload -, verifies if this signature is correct. If
-this fails the server rejects the unauthenticated request.
-
-Otherwise the server checks if the user authenticated with this
-long-term signing public key is authorized to execute the requested
-operation on the key referenced by the keyid parameter in the initial
+The server receives the signature and verifies it is correct using the public key from the initial request payload. If this fails, the server rejects the unauthenticated request. Otherwise, the server checks if the user authenticated with this long-term signing public key is authorized to execute the requested
+operation on the key referenced by the ~keyid~ parameter in the initial
 request packet.
 
-*** Client - Server authorization
+*** Client-Server authorization
 
 After the server authenticated the client, the server verifies if the
 client is authorized to execute the requested operation. The owner of
@@ -212,7 +199,7 @@ the key can create/modify a list of long-term signing public keys and
 the associated permissions. The format of this list is very simple,
 each entry is:
 
-#+BEGIN_SRC zig
+#+BEGIN_SRC c
   pk: [crypto_sign_PUBLICKEYBYTES]u8,
   perm: KlutshnikPermission,
 #+END_SRC
@@ -220,70 +207,70 @@ each entry is:
 where ~KlutshnikPermission~ is a byte with the following bits and
 their associated permission:
 
-#+BEGIN_SRC
+#+BEGIN_SRC c
       OWNER   = 1,
       DECRYPT = 2,
       UPDATE  = 4,
       DELETE  = 8,
 #+END_SRC
 
-*** Server - Server authorization
+*** Server-Server authorization
 
-In the case of create and rotate operations, the KMS's themselves need
-to authenticate the other KMS's if they are authorized to collaborate
-with each other. This is achieved by the KMS's already having a list
-of long-term signing public keys of all the authorized KMS's. These
-lists are manually maintained by the operators of the KMS's.
+In the case of ~create~ and ~rotate~ operations, the KM servers themselves need
+to authenticate the other KM servers if they are authorized to collaborate
+with each other. This is achieved by the KM servers already having a list
+of long-term signing public keys of all the authorized KM servers. These
+lists are manually maintained by the operators of the KM servers.
 
-When a create or rotate operation is started the KMS's as peers
+When a ~create~ or ~rotate~ operation is started the KM servers as peers
 receive the hashes of the long-term signing public keys that are
-chosen by the client to participate in this protocol run. The KMS then
-takes its list of authorized keys and checks if the received hashes
-match a key in their list. If not they abort the protocol, otherwise
+chosen by the client to participate in this protocol run. The KM servers then
+take their list of authorized keys and check if the received hashes
+match a key in their list. If not, they abort the protocol and otherwise
 they execute it.
 
 *** Protocol Operations
 
-The KMS provide the following operations:
+The KMS provides the following operations:
 
-  - Create key,
-  - Update key,
-  - Get public key,
-  - Decrypt,
-  - Delete key,
-  - Modify Authorization.
+  - Create key
+  - Update key
+  - Get public key
+  - Decrypt
+  - Delete key
+  - Modify Authorization
 
 **** Create operation
 
-The create operation essentially runs the STP-DKG protocol
+The ~create~ operation essentially runs the STP-DKG protocol
 implementation provided by liboprf [STP-DKG].
 
-The initial message payload of Create operations contains the ~msg0~
+The initial message payload of ~create~ operations contains the ~msg0~
 output from the ~stp_dkg_start_stp()~ function as the sole payload:
 
 #+BEGIN_SRC zig
 msg0: [stp_dkg.stpvssdkg_start_msg_SIZE]u8
 #+END_SRC
 
-After concluding the STP-DKG the server:
+After concluding the STP-DKG protocol, the server:
 
- - saves the generated share, all commitments of all shares, the
-   long-term signature and noise keys of all the other KMS's, the
-   parameters N & T, the long-term public key of the owner,
- - sets the epoch of this record to 0.
- - sends the "public key share" ~g * share~ to the client so that the
+ - Saves the generated share, all commitments of all shares, the
+   long-term signature and noise keys of all the other KM servers, the
+   parameters ~N~ (number of servers) and ~T~ (threshold), the long-term public key of the owner,
+ - Sets the epoch of this record to 0.
+ - Sends the "public key share" ~g * share~ to the client so that the
    client can reconstruct the public key of this KEK.
- - receives an initial owner-signed list of authorized long-term
-   signing public keys and their permissions, on which it has to
-   verify the signature successfully before also persisting this
+ - Receives an initial owner-signed list of authorized long-term
+   signing public keys and their permissions. Using this, the server
+   verifies the signature successfully before also persisting this
    authorization list.
 
 **** Update payload
 
-The update operation essentially runs the STP-UPDATE protocol
+The ~update~ operation essentially runs the STP-UPDATE protocol
 implementation provided by liboprf [STP-UPDATE].
 
-The payload for the Update request contains the ~msg0~ output from the
+The payload for the ~update~ request contains the ~msg0~ output from the
 ~toprf_update_start_stp()~ function, and the long-term signing public
 key of the client.
 
@@ -292,26 +279,35 @@ msg0: [tupdate.toprfupdate_stp_start_msg_SIZE]u8
 pk: [sodium.crypto_sign_PUBLICKEYBYTES]u8
 #+END_SRC
 
-After the successful completion of the liboprf STP-Update protocol the
+After the successful completion of the liboprf STP-Update protocol, the
 server:
 
-  - stores the updated share and all commitments related to the
-    updated key,
-  - increments the epoch, and
-  - sends the "public key share" ~g * share~ together with the updated
-    epoch to the client so that the client can reconstruct the public
-    key of this KEK.
+ - Stores the updated share and all commitments related to the
+   updated key;
+ - Increments the epoch
+ - Sends the "public key share" ~g * share~ together with the updated
+   epoch to the client so that the client can reconstruct the public
+   key of this KEK.
 
 **** Decrypt
 
-From the servers perspective the decrypt operation is basically
+From the server's perspective, the ~decrypt~ operation is basically
 evaluating an OPRF twice on two values provided by the client with the
 share as the key.
 
-The initial decrypt request packet carries the blinded value of the
-value ~w~ from the encrypted file as the alpha value, and a second
-time blinded with a different value as the verifier, as well as the
-long-term signing public key of the client.
+The ~decrypt~ operation uses a Verifiable Oblivious Pseudorandom
+Function (VOPRF). To begin, the client reads the ~w~ value from the
+encrypted file header. This ~w~ value is the public component used as
+the OPRF input (specifically, a point on the Ristretto255 curve).
+
+To protect privacy, the client blinds ~w~ by multiplying it with a
+random scalar ~r~ to produce the ~alpha~ value. To ensure
+verifiability, the client generates a second blinded value called the
+~verifier~, which allows the client to verify that the KM servers used
+the correct secret key shares without learning the shares themselves.
+
+The initial request packet carries these two blinded values and the
+client's long-term signing public key.
 
 #+BEGIN_SRC zig
 alpha: [sodium.crypto_core_ristretto255_BYTES]u8
@@ -321,11 +317,10 @@ pk: [sodium.crypto_sign_PUBLICKEYBYTES]u8
 
 **** Delete
 
-The delete operations is a very simple operation, it only checks if
-the user is authorized, and if so, does indeed delete the associated
-data on all the KMS's.
+The ~delete~ operation only checks if the user is authorized and, if so,
+deletes the associated data on all the KM servers.
 
-Delete requests only contain the the long-term signing public key of
+~delete~ requests only contain the long-term signing public key of
 the client.
 
 #+BEGIN_SRC zig
@@ -334,10 +329,11 @@ pk: [sodium.crypto_sign_PUBLICKEYBYTES]u8
 
 **** Refresh
 
-Refresh operations are used to fetch the latest public key and epoch
-by clients which were not running the update operation themselves.
+The ~refresh~ operations are used to fetch the latest public key and epoch
+by clients that were not running the update operation themselves.
 
-Refresh requests only contain the the long-term signing public key of
+Refresh requests only contain the long-term signing public key of
+the client in the payload.
 
 #+BEGIN_SRC zig
 pk: [sodium.crypto_sign_PUBLICKEYBYTES]u8
@@ -345,24 +341,24 @@ pk: [sodium.crypto_sign_PUBLICKEYBYTES]u8
 
 **** Manage Key Authorizations (ModAuth)
 
-This operation is reserved for the owner of the record. Using allows
+The ~modauth~ operation is reserved for the owner of the record. Using this operation allows
 the owner to add/delete other users of this key, set their
 permissions, and also list the current list of authorizations.
 
 Since only the owner (creator) of the record can add/delete or list
-items in the list of authorizations, there no need to send the
+items in the list of authorizations, there is no need to send the
 long-term signing public key.
 
 Authorization administration requests carry only one byte of payload,
-whether the request is only for reading, or also for writing.
+whether the request is only for reading, or for writing.
 
 #+BEGIN_SRC zig
 readonly: u8
 #+END_SRC
 
-The list of authorizations has a very minimalist format, each entry is
+The list of authorizations has a very minimalist format. Each entry is
 simply a long-term signing public key followed by a byte containing
-the associated permissions. The list itself is signed by the owners
+the associated permissions. The list itself is signed by the owner's
 long-term public key.
 
 ** File format
@@ -370,10 +366,10 @@ long-term public key.
 Encrypted files have the following structure:
 
 #+BEGIN_SRC
-16 bytes keyid
+32 bytes keyid
 4  bytes epoch
 32 bytes w value
-12 byte nonce-half
+12 bytes nonce-half
 every 64KB
     64 kBytes ciphertext (chacha20)
     16 bytes MAC (poly1305)
@@ -381,39 +377,8 @@ every 64KB
 
 ** References
 
-The main functionality is based on the UOKMS construction of the
-https://eprint.iacr.org/2019/1275
-
-    "Updatable Oblivious Key Management for Storage Systems"
-    by Stanislaw Jarecki, Hugo Krawczyk, and Jason Resch
-
-The Threshold OPRF is based on: https://eprint.iacr.org/2017/363
-
-    "TOPPSS: Cost-minimal Password-Protected Secret Sharing based on Threshold OPRF"
-    by Stanislaw Jarecki, Aggelos Kiayias, Hugo Krawczyk, and Jiayu Xu
-
-Within this, the DKG is based on
-
-    R. Gennaro, M. O. Rabin, and T. Rabin. "Simplified VSS and fact-track
-    multiparty computations with applications to threshold cryptography" In B.
-    A. Coan and Y. Afek, editors, 17th ACM PODC, pages 101–111. ACM, June /
-    July 1998
-
-[STP-DKG] A full protocol specification of this DKG is available in
-the liboprf docs under: https://github.com/stef/liboprf/blob/master/docs/stp-dkg.txt
-
-The key-update is based on:
-
-    Fig. 2 from "Simplified VSS and fact-track multiparty computations with
-    applications to threshold cryptography" by R. Gennaro, M. O. Rabin, and T.
-    Rabin.
-
-[STP-UPDATE] A full protocol specification of this key-update is
-available in the liboprf docs under: https://github.com/stef/liboprf/blob/master/docs/stp-update.txt
-
-The files are encrypted using `crypto_secretbox()` by libsodium
-https://github.com/jedisct1/libsodium, using the STREAM construction
-https://eprint.iacr.org/2015/189:
-
-    "Online Authenticated-Encryption and its Nonce-Reuse Misuse-Resistance"
-    by Viet Tung Hoang, Reza Reyhanitabar, Phillip Rogaway, and Damian Vizár
+ - [UOKMS] The main key management functionality is based on the Updatable Oblivious KMS (UOKMS) protocol described in: "Updatable Oblivious Key Management for Storage Systems" by Stanislaw Jarecki, Hugo Krawczyk, and Jason Resch (https://eprint.iacr.org/2019/1275).
+ - The Threshold OPRF is based on: "TOPPSS: Cost-minimal Password-Protected Secret Sharing based on Threshold OPRF" by Stanislaw Jarecki, Aggelos Kiayias, Hugo Krawczyk, and Jiayu Xu (https://eprint.iacr.org/2017/363).
+ - [STP-DKG] The distributed key generation (DKG) is based on: "Simplified VSS and fast-track multiparty computations with applications to threshold cryptography" by R. Gennaro, M. O. Rabin, and T. Rabin (https://dl.acm.org/doi/10.1145/277697.277716). A full protocol specification is available in the liboprf documentation: https://github.com/stef/liboprf/blob/master/docs/stp-dkg.txt.
+ - [STP-UPDATE] The key update protocol is based on the ~Simple-Mult~ protocol described in: "Simplified VSS and fast-track multiparty computations with applications to threshold cryptography" by R. Gennaro, M. O. Rabin, and T. Rabin. A full protocol specification is available in the liboprf documentation: https://github.com/stef/liboprf/blob/master/docs/stp-update.txt.
+ - The files are encrypted using ~crypto_secretbox()~ from libsodium (https://github.com/jedisct1/libsodium), following the STREAM protocol described in: "Online Authenticated-Encryption and its Nonce-Reuse Misuse-Resistance" by Viet Tung Hoang, Reza Reyhanitabar, Phillip Rogaway, and Damian Vizár (https://eprint.iacr.org/2015/189).
