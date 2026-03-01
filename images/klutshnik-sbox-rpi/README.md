@@ -85,16 +85,16 @@ host="<ip address>"
 port=443
 # public key of the server
 ssl_cert = "cert.pem"
-ltsigkey="<public ltsigkey>"
+ltsigkey_path="<path/to/public/ltsigkey>"
 ```
 
 In order:
 
-- The ~<devicename>~ can be any unique name you want to give to your device.
-- The ~host~ is the IP address of the device where this Klutshnik server will be available.
-- The ~port~ is the port where this Klutshnik server will be available. By default it is 443.
-- By default, ~ssl_cert~ points to ~/etc/klutshnik/cert.pem~, which is a self-signed certificate. If you are using proper official Certificate Authority issued TLS certs, you can omit this line.
-- The ~ltsigkey~ is the long-term signing public key of the newly set up Klutshnik device. You can find it at ~/etc/klutshnik/ltsig.key.pub~
+- The `<devicename>` can be any unique name you want to give to your device.
+- The `host` is the IP address of the device where this Klutshnik server will be available.
+- The `port` is the port where this Klutshnik server will be available. By default it is 443.
+- By default, `ssl_cert` points to `/etc/klutshnik/cert.pem`, which is a self-signed certificate. If you are using proper official Certificate Authority issued TLS certs, you can omit this line.
+- The `ltsigkey_path` is the path to the long-term signing public key of the newly set up Klutshnik device. You can find it at `/etc/klutshnik/ltsig.key.pub`.
 
 ## Setting Up authorized_keys
 
