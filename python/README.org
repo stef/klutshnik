@@ -1,12 +1,14 @@
-* klutshnik cli frontend
+* Klutshnik CLI Frontend
 
-Klutshnik is a system which encrypts data-at-rest: backups, files,
-archives - for you or your group. Yawn, even PGP^WAge can do
-that. Yes, but it cannot do regular key updates on an untrusted
-storage, providing post-compromise security (PCS) or forward secrecy
-(FS). And the best part is, the encryption key is shared in a
-threshold setup, and never ever assembled, so chances of accidental
-leakage are 0.
+Klutshnik is a system which **encrypts data-at-rest**: backups, files, and archives.
 
-This package provides the CLI client for this system. For more information, pls
-see the man page at https://klutshnik.info/manpages/klutshnik.html
+Yawn. Even PGP or Age can do that. Yes, but can they rotate keys without decrypting terabytes of data? Can they share your key across multiple servers so it *never* exists in one place? Can they guarantee that if your key is stolen today, the thief can't decrypt backups from yesterday (Forward Secrecy) or tomorrow (Post-Compromise Security)? No.
+
+Klutshnik:
+ - is self-hosted and free software,
+ - compartments your keys from your plaintext,
+ - supports running on small microcontrollers,
+ - stores absolutely no private data.
+
+This package provides the CLI client for this system. For more information, please
+see the man page at [[https://klutshnik.info/manpages/klutshnik.html][klutshnik(1)]].

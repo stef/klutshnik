@@ -151,13 +151,13 @@ int main(void) {
   randombytes_buf(dek,sizeof dek);
 
   fprintf(stderr, "[5] encrypting stream\n");
-  if(stream_encrypt(encrypt[0], mitm[1], w, dek)) {
+  if(stream_encrypt(encrypt[0], mitm[1],w, dek)) {
     fail("encryption test");
     return 1;
   }
 
   fprintf(stderr, "[6] decrypting stream\n");
-  if(stream_decrypt(mitm[0], decrypt[1], w, dek)) {
+  if(stream_decrypt(mitm[0], decrypt[1],w, dek)) {
     fail("decryption test");
     return 1;
   }
