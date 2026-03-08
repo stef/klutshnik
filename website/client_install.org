@@ -20,7 +20,7 @@
 
 The ~klutshnik~ client is your gateway to secure data storage and key management.
 
-All cryptographic operations happen locally on your device, ensuring your data never leaves your device in plaintext. The client talks to these servers using the **Verifiable Oblivious Pseudo-Random Function (VOPRF)** protocol (based on [[https://datatracker.ietf.org/doc/rfc9497/][RFC 9497]]), allowing them to help you unlock your data without ever learning your secrets.
+All cryptographic operations happen locally on your device, ensuring your data never leaves your device in plaintext. The client talks to these servers using a **Verifable Oblivious Pseudo-Random Function (VOPRF)** protocol (based on [[https://datatracker.ietf.org/doc/rfc9497/][RFC 9497]]) in a threshold settin, allowing them to help you unlock your data without ever learning your secrets.
 
 * Installing the Client
 
@@ -87,13 +87,6 @@ With the dependencies in place, install the Python ~klutshnik~ client:
 python3 -m virtualenv --copies --system-site-packages env
 source env/bin/activate
 pip install klutshnik
-#+END_SRC
-
-*** Verification
-
-Verify the installation was successful:
-#+BEGIN_SRC sh
-klutshnik --version
 #+END_SRC
 
 * Configuring the Client

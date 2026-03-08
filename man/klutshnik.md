@@ -6,29 +6,29 @@ klutshnik - Klutshnik KMS command-line client
 
      klutshnik init <configfile>
 
-     klutshnik create <keyname> [<ltsigkey>] <pk>
+     klutshnik create <keyname> [<ltsigkey] <pk
 
-     klutshnik encrypt <pk> <plaintext> <ciphertext>
+     klutshnik encrypt <pk> <plaintext >ciphertext
 
-     klutshnik decrypt [<ltsigkey>] <ciphertext> <plaintext>
+     klutshnik decrypt [<ltsigkey] <ciphertext >plaintext
 
-     klutshnik rotate <keyname> [<ltsigkey>] <pk-and-delta>
+     klutshnik rotate <keyname> [<ltsigkey] >pk-and-delta
 
-     klutshnik refresh <keyname> [<ltsigkey>] <pk>
+     klutshnik refresh <keyname> [<ltsigkey] >pk
 
-     klutshnik delete <keyname> [<ltsigkey>]
+     klutshnik delete <keyname> [<ltsigkey]
 
-     klutshnik update <delta> <files2update>
+     klutshnik update <delta <files2update
 
-     klutshnik adduser <keyname> <b64_pubkey> <permissions> [<ltsigkey>]
+     klutshnik adduser <keyname> <b64_pubkey> <permissions> [<ltsigkey]
 
-     klutshnik deluser <keyname> <b64_pubkey> [<ltsigkey>]
+     klutshnik deluser <keyname> <b64_pubkey> [<ltsigkey]
 
-     klutshnik listusers <keyname> [<ltsigkey>]
+     klutshnik listusers <keyname> [<ltsigkey]
 
-     klutshnik import <keyid> <config_token> [<ltsigkey>]
+     klutshnik import <keyid> <config_token> [<ltsigkey]
 
-     klutshnik provision <port> <config> <auth_keys> <type> [<ltsigkey>]
+     klutshnik provision <serial port> <config> <auth_keys> <uart|esp> [<ltsigkey]
 
 # DESCRIPTION
 
@@ -43,7 +43,7 @@ The most important aspects are:
 - **Asymmetric Encryption:** Encryption only requires a public key.
 - **Threshold Security:** The Key Encryption Key (KEK) is split into shares and distributed across multiple servers. No single server can compromise the key.
 - **Privacy-Preserving:** Object identifiers and keys are hidden from the KM servers through blinding techniques.
-- **Secure Transport:** All key transport to and from KM servers are secure.
+- **Secure Transport:** All key transport to and from KM servers are unconditionally - information theoretically - secure.
 - **Verifiability:** Identifying KM servers that respond with corrupt values.
 - **Efficient Rotation:** Rotating the KEKs does not require downloading or re-encrypting the underlying data.
 - **Zero-knowledge Updates:** Updating the KEKs can be done by untrusted storage without learning anything.
@@ -103,10 +103,10 @@ manager like `pwdsphinx(1)`. See `klutshnik.cfg(5)` for more details.
 ### Create a new key
 
 ```sh
-klutshnik create <keyname> [<ltsigkey>]
+klutshnik create <keyname> [<ltsigkey]
 ```
 
-Creates a new key identified by `<keyname>`. `ltsigkey` is the long-term signing private key as described above, and should be provided if the `ltsigkey_path` config option is not set.
+Creates a new key identified by `<keyname>`. `ltsigkey` is the long-term signing private key as described above, and should be provided on standard input if the `ltsigkey_path` config option is not set.
 
 This operation outputs the public key, which can
 be used to encrypt files. The encrypted files can be decrypted
@@ -131,21 +131,21 @@ epoch.
 ### Decrypt a file
 
 ```sh
-klutshnik decrypt [<ltsigkey>] <ciphertext >plaintext
+klutshnik decrypt [<ltsigkey] <ciphertext >plaintext
 ```
 
-Decrypts the input ciphertext and outputs the plaintext.
-This requires connectivity to a threshold of key management servers.
+Decrypts the input ciphertext and outputs the plaintext to standard output.
+This operation requires connectivity to a threshold of key management servers.
 If your long-term signing key is not in the configuration,
 it must be prefixed to the ciphertext on standard input.
 
 ### Rotate a key
 
 ```sh
-klutshnik rotate <keyname> [<ltsigkey>] >pubkey-and-delta
+klutshnik rotate <keyname> [<ltsigkey] >pubkey-and-delta
 ```
 
-Generates a new epoch for the specified key.
+Rotates the specified key.
 If your long-term signing key is not in the configuration (see `klutshnik.cfg(5)`),
 it must be provided on standard input.
 The output of this operation is:
@@ -166,12 +166,12 @@ and the previous key.
 ### Update a file with a rotated key
 
 ```sh
-klutshnik update <delta> <files2update>
+klutshnik update <delta <files2update
 ```
 
 Applies a delta update token (generated from the `klutshnik rotate`
-operation) to a list of files. This operation does not
-require a long-term signing key. It can be done offline, without
+operation) to a list of files. Both of the inputs are expected on the standard
+input. This operation does not require a long-term signing key. It can be done offline, without
 connectivity to the key management servers.
 In fact, this operation can run on the storage server itself.
 
@@ -183,10 +183,11 @@ and the previous key.
 ### Refresh local key metadata
 
 ```sh
-klutshnik refresh <keyname> [<ltsigkey>] >pk
+klutshnik refresh <keyname> [<ltsigkey] >pk
 ```
 
-Updates the client's local cache with the latest metadata.
+Updates the client's local cache with the latest metadata. This is necessary
+after another client rotated the key.
 The following metadata are refreshed; each client should run this operation to refresh their local copy of:
 
 - the public key
@@ -201,7 +202,7 @@ This operation outputs the current public key associated with the
 ### Delete a key
 
 ```sh
-klutshnik delete <keyname> [<ltsigkey>]
+klutshnik delete <keyname> [<ltsigkey]
 ```
 
 Deletes the shares of the specified key from all key management servers.
@@ -229,7 +230,7 @@ must be passed to the user who has been authorized, so they can
 ### Delete a user
 
 ```sh
-klutshnik deluser <keyname> <b64_pubkey> [<ltsigkey>]
+klutshnik deluser <keyname> <b64_pubkey> [<ltsigkey]
 ```
 
 Revokes all permissions for a user specified by their public key.
@@ -239,7 +240,7 @@ associated to their `ltsigkey`.
 ### List authorizations of users
 
 ```sh
-klutshnik listusers <keyname> [<ltsigkey>]
+klutshnik listusers <keyname> [<ltsigkey]
 ```
 
 Lists all authorized users and their associated permissions for a
@@ -297,7 +298,7 @@ After this operation is completed, a base64 encoded `authorized_keys` entry is p
 # SECURITY CONSIDERATIONS
 
 - You **MUST** keep delta update tokens private! Leaking them compromises the system’s forward secrecy and post-compromise security.
-- It is **RECOMMENDED** to store your master signing key
+- It is **RECOMMENDED** to store your client master key
   in a dedicated secure storage or password manager rather than plain
   files on disk. `pwdsphinx` (https://sphinx.pm) provides native support for this.
 - Do not let any 3rd-party hold enough shares to achieve the threshold

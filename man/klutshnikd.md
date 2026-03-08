@@ -24,7 +24,7 @@ The most important aspects are:
 - **Asymmetric Encryption:** Encryption only requires a public key.
 - **Threshold Security:** The Key Encryption Key (KEK) is split into shares and distributed across multiple servers. No single server can compromise the key.
 - **Privacy-Preserving:** Object identifiers and keys are hidden from the KM (Key Management) servers through blinding techniques.
-- **Secure Transport:** All key transport to and from KM servers are secure.
+- **Secure Transport:** All key transport to and from KM servers are unconditionally - information theoretically - secure.
 - **Verifiability:** Identifying KM servers that respond with corrupt values.
 - **Efficient Rotation:** Rotating the KEKs does not require downloading or re-encrypting the underlying data.
 - **Zero-knowledge Updates:** Updating the KEKs can be done by untrusted storage without learning anything.

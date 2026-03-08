@@ -93,6 +93,8 @@ client with the `init` parameter:
 klutshnikd init
 ```
 
+You need to publish this key so that users can use your server.
+
 ### NOISEKEY
 
 The path to the server's long-term Noise private key, used for secure
@@ -132,4 +134,4 @@ This is free software: you are free to change and redistribute it. There is NO W
 
 # SEE ALSO
 
-`klutshnikd(8)`, `klutshnik(1)`, `klutshnik.cfg(5)`
+`klutshnikd(1)`, `klutshnik(1)`, `klutshnik.cfg(5)`

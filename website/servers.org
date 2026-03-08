@@ -24,7 +24,7 @@ Klutshnik relies on a distributed network of key management servers.
 You can choose to host your own private servers for maximum
 control, or utilize existing public servers for a lower barrier to
 entry. Because the protocol is oblivious, public servers can never
-access your private data or passwords.
+access your private data or keys.
 
 |----------------+------+------------------------------------------------------------------+------------------------------------------------+-----------------------------|
 | hostname       | port | onion url                                                        | long-term signature pubkey                     | website                     |

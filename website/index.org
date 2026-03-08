@@ -54,7 +54,7 @@ To understand why Klutshnik exists, we have to look at how we handle secrets dif
 
 *** Data-in-Transit
 For data-in-transit (messaging), we have **Forward Secrecy (FS)** and **Post-Compromise Security (PCS)**. These security
-properties (PCS & FS) are achieved by generating new ephemeral keys for every message. If a key is stolen, the attacker can strip that one message, but they can't decrypt previous messages (FS) and future messages (PCS).
+properties (PCS & FS) are achieved by generating new ephemeral keys for every message. If a key is stolen, the attacker can decrypt that one message, but they can't decrypt previous messages (FS) and future messages (PCS).
 
 *** Data-at-Rest
 But how do you actually do that with data that you send to your future
@@ -62,7 +62,7 @@ self? This is basically what data-at-rest encryption is. Encryption tools like P
 1. A random symmetric key used to encrypt the actual data. In Klutshnik, this is called the DEK (Data Encryption Key).
 2. A long-term asymmetric key which is used to encrypt the DEK. In Klutshnik, this is called the KEK (Key Encryption Key).
 
-The generic flow is: $EncryptedFile = Encrypt(Data, DEK) + Encrypt(DEK, KEK)$.
+The generic flow is: $EncryptedFile = Encrypt(DEK, KEK) + Encrypt(Data, DEK)$.
 
 The main issue with this model is that the KEK is static. If someone steals your PGP private key, they can decrypt every file you ever saved (no Forward Secrecy) and every file you save in the future (no Post-Compromise Security) until you manually re-encrypt everything.
 
@@ -73,7 +73,7 @@ the KEK without having to decrypt the DEK with the old KEK and
 re-encrypt with the new KEK. If PGP or AGE were to support this, they 
 would need to decrypt the file and re-encrypt it with the new DEK.
 
-Klutshnik allows you to rotate your KEK without ever downloading or decrypting the data. It provides forward secrecy since old backup tapes cannot be decrypted with today's keys. It also provides post-compromise security since if your device is hacked, you run a meaningful key rotation and the attacker's stolen key becomes useless for future data access.
+Klutshnik allows you to rotate your KEK without ever downloading or decrypting the data. It provides forward secrecy since old backups cannot be decrypted with today's keys. It also provides post-compromise security since if your device is hacked, you run a meaningful key rotation and the attacker's stolen key becomes useless for future data access.
 
 ** Post-quantum and Harvest now, decrypt later
 

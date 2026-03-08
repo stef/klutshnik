@@ -31,7 +31,7 @@ These recipes help you get started quickly on specific platforms.
 
 ** On Raspberry Pis
 
-This is the easiest way to run a server. We provide ready-to-use OS [[https://github.com/stef/klutshnik/releases/tag/v0.3.0][images for Raspberry Pi 3 and
+This is the easiest way to run a server. We provide ready-to-use OS [[https://github.com/stef/klutshnik/releases/latest][images for Raspberry Pi 3 and
 newer]] based on the latest Alpine Linux release. They come
 pre-configured with proper Seccomp BPF sandboxing.
 
@@ -50,7 +50,7 @@ generates keys, self-signed certificates and a Seccomp BPF sandboxing
 ruleset.
 
 You can either connect via a serial port, or SSH into the Raspberry Pi using
-the root and Klutshnik password, which you should change
+the root and ~"klutshnik"~ password, which you should change
 immediately. Furthermore, you should either disable SSH (if you want
 only serial port access), or upload your SSH key to
 ~/root/.ssh/authorized_keys~ and disable SSH password logins.
@@ -98,6 +98,7 @@ The image comes pre-installed with Tor, and freshly configured at
 first boot. If you want to enable it, you must login as root, and run:
 
 #+BEGIN_SRC sh
+mount -o remount,rw /
 rc-update add tor default
 #+END_SRC
 
@@ -105,6 +106,7 @@ If you want to start it immediately, run:
 
 #+BEGIN_SRC sh
 /etc/init.d/tor start
+mount -o remount,ro /
 #+END_SRC
 
 Your onion address will appear in: ~/var/lib/tor/klutshnik/hostname~.

@@ -21,14 +21,14 @@
 Klutshnik operates on a client-threshold-server architecture. In this
 system, your master secret is never stored in one place. Instead, it is
 split into multiple shares and distributed across several independent
-KM (Key Management) servers. To encrypt or decrypt data, the client
+KM (Key Management) servers. To decrypt data, the client
 communicates with a minimum number of these servers (the threshold) to
 collectively derive a key.
 
 Security is maintained through a blinded protocol. When you perform
 an operation, the client sends a blinded input (a mathematically masked
 version of your secret) to the servers. This allows the servers to
-process your request without ever seeing your actual password, your
+process your request without ever seeing your ciphertext, related metadata, your
 plaintext data, or the final decryption key.
 
 The Klutshnik protocol only makes sense if the KM server is located

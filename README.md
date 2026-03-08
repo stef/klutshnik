@@ -48,9 +48,8 @@ which:
 > that the [calculated en/decryption key] is indeed the value that
 > results from computing the OPRF on the client-provided object
 > identifier. This prevents data loss that occurs if the [calculated
->
-> > en/decryption key] is wrong (either due to computing error or to
-> > adversarial action)
+> en/decryption key] is wrong (either due to computing error or to
+> adversarial action)
 
 So, in a nutshell:
 

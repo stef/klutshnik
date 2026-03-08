@@ -32,7 +32,7 @@ Setting the `ARCH` variable affects which RPi versions the image will run on:
 | RPi 3, RPi Zero 2 W, RPi Compute Module 3 |  ✅   |  ✅   |   ✅    |
 | RPi 4, RPi 400, RPi Compute Module 4      |       |  ✅   |   ✅    |
 
-Currently only the aarch64 variant is tested. The other architectures may work but are not guaranteed.
+Currently only the aarch64 variant is tested. The other architectures may work but are untested.
 
 The results are stored in the `./output` directory.
 
@@ -90,11 +90,11 @@ ltsigkey="<public ltsigkey>"
 
 In order:
 
-- The ~<devicename>~ can be any unique name you want to give to your device.
-- The ~host~ is the IP address of the device where this Klutshnik server will be available.
-- The ~port~ is the port where this Klutshnik server will be available. By default it is 443.
-- By default, ~ssl_cert~ points to ~/etc/klutshnik/cert.pem~, which is a self-signed certificate. If you are using proper official Certificate Authority issued TLS certs, you can omit this line.
-- The ~ltsigkey~ is the long-term signing public key of the newly set up Klutshnik device. You can find it at ~/etc/klutshnik/ltsig.key.pub~
+- The `<devicename>` can be any unique name you want to give to your device.
+- The `host` is the IP address of the device where this Klutshnik server will be available.
+- The `port` is the port where this Klutshnik server will be available. By default it is 443.
+- By default, `ssl_cert` points to `/etc/klutshnik/cert.pem`, which is a self-signed certificate. If you are using proper official Certificate Authority issued TLS certs, you can omit this line.
+- The `ltsigkey` is the long-term signing public key of the newly set up Klutshnik device. You can find it at `/etc/klutshnik/ltsig.key.pub`
 
 ## Setting Up authorized_keys
 
@@ -113,8 +113,10 @@ The file format is one base64-encoded public key per line.
 Tor is pre-installed and configured. To enable it:
 
 ```sh
+mount -o remount,rw /
 rc-update add tor default
 /etc/init.d/tor start
+mount -o remount,ro /
 ```
 
 The hidden service hostname is at `/var/lib/tor/klutshnik/hostname` after Tor starts.
