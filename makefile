@@ -97,6 +97,6 @@ clean:
 	@rm -f *.o libklutshnik.$(STATICEXT) libklutshnik.$(SOEXT) libklutshnik.pc
 
 %.o: %.c
-	$(CC) $(CFLAGS) -fPIC $(INCLUDES) -c $< -o $@
+	$(CC) $(CPPFLAGS) $(CFLAGS) -fPIC $(INCLUDES) -c $< -o $@
 
 PHONY: clean
