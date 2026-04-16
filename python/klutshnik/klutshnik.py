@@ -249,35 +249,37 @@ def get_servers(keyid = None):
 #### OPs ####
 
 def init(cfgfile):
+   global masterkey
    if not os.path.exists(config['keystore']):
       os.makedirs(config['keystore'], mode=0o700)
       print(f"Created missing directory for keystore at '{config['keystore']}'.", file=sys.stderr)
 
    if 'clientkey_path' not in config:
-      # todo instead of aborting try to read it from stdin, use that
-      # or if stdin does not have any, just generate it and output it to stdout among loud warnings
-      print(f"The `clientkey_path` configuration value is not set\n."
-            f"Please uncomment the line and use the default or some prefered path to store this private key.\n"
-            f"aborting.",
-            file=sys.stderr)
-      return False
-   if os.path.exists(config['clientkey_path']):
+      print(f"The `clientkey_path` configuration value is not set\n"
+            f"Trying to read from standard input - if you don't pass it there abort by pressing ctrl-c\n"
+            f"then uncomment the line with with `clientkey_path` in the config file and use the default\n"
+            f"or some prefered path to store this private key.\n"
+            , file=sys.stderr)
+      masterkey = getclientkey()
+
+   if 'clientkey_path' in config and os.path.exists(config['clientkey_path']):
       print(f"{config['clientkey_path']} exists, refusing to overwrite.\n"
             f"if you want to generate a new one, delete the old one first.\n"
             f"aborting",
             file=sys.stderr)
       return False
 
-   global masterkey
-   masterkey = pysodium.randombytes(64)
+   if masterkey is None:
+      masterkey = pysodium.randombytes(64)
 
-   with open(config['clientkey_path'], 'wb') as fd:
-     fd.write(masterkey)
+   if 'clientkey_path' in config:
+      with open(config['clientkey_path'], 'wb') as fd:
+        fd.write(masterkey)
 
-   print(f"Succsessfully generated and stored client key at.\n"
-         f"\t'{config['clientkey_path']}'\n"
-         f"\x1b[0;31mMake sure you keep this key secure and have a backup\x1b[0m.\n"
-         ,file=sys.stderr)
+      print(f"Succsessfully generated and stored client key at.\n"
+            f"\t'{config['clientkey_path']}'\n"
+            f"\x1b[0;31mMake sure you keep this key secure and have a backup\x1b[0m.\n"
+            ,file=sys.stderr)
 
    ltsig_sk = getltsigkey()
    ltsig_pk = pysodium.crypto_sign_sk_to_pk(ltsig_sk)
