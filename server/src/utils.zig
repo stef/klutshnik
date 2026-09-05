@@ -9,10 +9,8 @@ pub fn hexdump(buf: []const u8) void {
 }
 
 
-pub fn dir_exists(path: []const u8) bool {
-    var cwd = std.fs.cwd();
-    const args: std.fs.Dir.OpenOptions = undefined;
-    var dir = cwd.openDir(path, args) catch return false;
-    dir.close();
+pub fn dir_exists(io: std.Io, path: []const u8) bool {
+    var dir = std.Io.Dir.cwd().openDir(io, path, .{}) catch return false;
+    dir.close(io);
     return true;
 }

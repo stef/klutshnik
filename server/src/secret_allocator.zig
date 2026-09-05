@@ -4,7 +4,6 @@ const sodium = @cImport({
     @cInclude("sodium.h");
 });
 
-
 pub fn SecretAllocator() type {
     return struct {
         parent_allocator: Allocator,
@@ -35,9 +34,9 @@ pub fn SecretAllocator() type {
                  new_len: usize,
                  ra: usize) ?[*]u8 {
             const self: *Self = @ptrCast(@alignCast(ctx));
-            _=sodium.sodium_munlock(@ptrCast(buf),buf.len);
             const result = self.parent_allocator.rawRemap(buf, log2_buf_align, new_len, ra);
             if(result) |new_buf| {
+                if(new_buf!=buf.ptr) _=sodium.sodium_munlock(@ptrCast(buf),buf.len);
                 if(new_len>0 and 0!=sodium.sodium_mlock(@ptrCast(new_buf), new_len)) {
                     self.parent_allocator.rawFree(new_buf[0..new_len], log2_buf_align, ra);
                     return null;
@@ -71,7 +70,7 @@ pub fn SecretAllocator() type {
             ra: usize,
         ) bool {
             const self: *Self = @ptrCast(@alignCast(ctx));
-            if(new_len==0) _=sodium.sodium_munlock(@ptrCast(buf),buf.len);
+            defer _= if(new_len==0) sodium.sodium_munlock(@ptrCast(buf),buf.len);
             if (self.parent_allocator.rawResize(buf, log2_buf_align, new_len, ra)) {
                 if(new_len>buf.len) _=sodium.sodium_mlock(buf.ptr, new_len);
                 return true;

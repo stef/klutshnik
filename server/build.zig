@@ -63,8 +63,8 @@ pub fn build(b: *std.Build) void {
     exe.root_module.addImport("toml", toml_module);
     exe.root_module.addImport("bearssl", bearssl_module);
     //exe.linkLibrary(bearssl_package.artifact("zig-bearssl"));
-    exe.addIncludePath(b.path("."));
-    exe.addCSourceFile(.{ .file = b.path("src/workaround.c"), .flags = &[_][]const u8{"-Wall"} });
+    exe.root_module.addIncludePath(b.path("."));
+    exe.root_module.addCSourceFile(.{ .file = b.path("src/workaround.c"), .flags = &[_][]const u8{"-Wall"} });
 
     if(system_libs) {
         //exe.linkSystemLibrary2("oprf-noiseXK", .{ .preferred_link_mode = .static });
@@ -72,12 +72,12 @@ pub fn build(b: *std.Build) void {
         //exe.linkSystemLibrary2("sodium", .{ .preferred_link_mode = .static });
         //exe.linkSystemLibrary("oprf");
         //exe.linkSystemLibrary("sodium");
-        exe.addObjectFile(.{ .cwd_relative = ("/usr/lib/libsodium.a") });
-        exe.addObjectFile(.{ .cwd_relative = ("/usr/lib/liboprf.a") });
-        exe.addObjectFile(.{ .cwd_relative = ("/usr/lib/liboprf-noiseXK.a") });
-        exe.addSystemIncludePath(.{ .cwd_relative = "/usr/include/oprf/noiseXK/" });
-        exe.addSystemIncludePath(.{ .cwd_relative = "/usr/include/oprf/noiseXK/karmel" });
-        exe.addSystemIncludePath(.{ .cwd_relative = "/usr/include/oprf/noiseXK/karmel/minimal" });
+        exe.root_module.addObjectFile(.{ .cwd_relative = ("/usr/lib/libsodium.a") });
+        exe.root_module.addObjectFile(.{ .cwd_relative = ("/usr/lib/liboprf.a") });
+        exe.root_module.addObjectFile(.{ .cwd_relative = ("/usr/lib/liboprf-noiseXK.a") });
+        exe.root_module.addSystemIncludePath(.{ .cwd_relative = "/usr/include/oprf/noiseXK/" });
+        exe.root_module.addSystemIncludePath(.{ .cwd_relative = "/usr/include/oprf/noiseXK/karmel" });
+        exe.root_module.addSystemIncludePath(.{ .cwd_relative = "/usr/include/oprf/noiseXK/karmel/minimal" });
     } else {
         // build vendored liboprf and libsodium
         const libsodium_package = b.dependency("libsodium", .{
@@ -87,18 +87,18 @@ pub fn build(b: *std.Build) void {
             .static = true,
             .shared = false,
         });
-        exe.linkLibrary(libsodium_package.artifact("sodium"));
-        exe.addIncludePath(libsodium_package.path("include"));
+        exe.root_module.linkLibrary(libsodium_package.artifact("sodium"));
+        exe.root_module.addIncludePath(libsodium_package.path("include"));
 
         const liboprf_package = b.dependency("liboprf", .{
             .target = target,
             .optimize = optimize,
         });
-        exe.linkLibrary(liboprf_package.artifact("liboprf"));
-        exe.addIncludePath(liboprf_package.path("src"));
-        exe.addIncludePath(liboprf_package.path("src/noise_xk/include"));
-        exe.addIncludePath(liboprf_package.path("src/noise_xk/include/karmel"));
-        exe.addIncludePath(liboprf_package.path("src/noise_xk/include/karmel/minimal"));
+        exe.root_module.linkLibrary(liboprf_package.artifact("liboprf"));
+        exe.root_module.addIncludePath(liboprf_package.path("src"));
+        exe.root_module.addIncludePath(liboprf_package.path("src/noise_xk/include"));
+        exe.root_module.addIncludePath(liboprf_package.path("src/noise_xk/include/karmel"));
+        exe.root_module.addIncludePath(liboprf_package.path("src/noise_xk/include/karmel/minimal"));
     }
 
     const options = b.addOptions();

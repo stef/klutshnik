@@ -3,8 +3,8 @@ const builtin = @import("builtin");
 const toml = @import("toml");
 const ssl = @import("bearssl");
 const mem = std.mem;
-const net = std.net;
-const posix = std.posix;
+const net = std.Io.net;
+const posix = std.posix.system;
 const BufSet = std.BufSet;
 const blake2b = std.crypto.hash.blake2.Blake2b256;
 const ed25519 = std.crypto.sign.Ed25519;
@@ -38,22 +38,23 @@ const DEBUG = (builtin.mode == std.builtin.OptimizeMode.Debug);
 const warn = std.debug.print;
 
 /// allocator
-var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-const allocator = gpa.allocator();
+var allocator: std.mem.Allocator = undefined ;
 
-var s_state = secret_allocator.secretAllocator(allocator);
-const s_allocator = s_state.allocator();
+var io: std.Io = undefined;
+
+var s_state: secret_allocator.SecretAllocator() = undefined;
+var s_allocator: std.mem.Allocator = undefined;
 
 /// stdout
 var stdout_buffer: [1024]u8 = undefined;
-var stdout_writer = std.fs.File.stdout().writer(&stdout_buffer);
+var stdout_writer: std.Io.File.Writer = undefined;
 const stdout = &stdout_writer.interface;
 
-const sslStream = ssl.Stream(*net.Stream, *net.Stream);
+const sslStream = ssl.Stream(*net.Socket, *net.Socket);
 
 const KeyStore = std.hash_map.AutoHashMap([sodium.crypto_generichash_BYTES]u8, Pubkeys);
 
-var conn: net.Server.Connection = undefined;
+var conn: net.Stream = undefined;
 
 const KlutshnikOp = enum(u8) {
     /// KMS ops
@@ -161,17 +162,21 @@ const Config = struct {
     authorized_keys: KeyStore,
 };
 
+const LoadBlobError = error{
+    WrongSize,
+};
+
 fn log(comptime msg: []const u8, args: anytype, recid: []const u8) void {
     const pid = std.os.linux.getpid();
     if(recid.len==0) {
-        warn("{d} {f} ", .{ pid, conn.address });
+        warn("{d} {f} ", .{ pid, conn.socket.address });
     } else {
-        warn("{d} {f} {x} ", .{ pid, conn.address, recid });
+        warn("{d} {f} {x} ", .{ pid, conn.socket.address, recid });
     }
     warn(msg, args);
 }
 
-fn sigHandler(sig: i32) callconv(.c) void {
+fn sigHandler(sig: posix.SIG) callconv(.c) void {
     if (sig == std.posix.SIG.PIPE) {
         std.c._exit(9);
     }
@@ -186,27 +191,26 @@ fn setSigHandler() void {
     std.posix.sigaction(std.posix.SIG.PIPE, &sa, null);
 }
 
-fn expandpath(path: []const u8) [:0]u8 {
+fn expandpath(env: *const std.process.Environ.Map, path: []const u8) [:0]u8 {
     if (path[0] != '~') {
         return allocator.dupeZ(u8, path) catch @panic("OOM");
     }
-    const home = posix.getenv("HOME") orelse "/nonexistant";
+    const home = env.get("HOME") orelse "/nonexistant";
     const xpath = mem.concat(allocator, u8, &[_][]const u8{ home, path }) catch @panic("OOM");
     const xpathZ = allocator.dupeZ(u8, xpath) catch @panic("OOM");
     allocator.free(xpath);
     return xpathZ;
 }
 
-fn check_or_init(path: [:0]const u8, ktype: KeyType) void {
-    std.fs.cwd().access(path, .{}) catch {
+fn check_or_init(args: []const [:0]const u8, path: [:0]const u8, ktype: KeyType) void {
+    std.Io.Dir.cwd().access(io, path, .{}) catch {
         const type_name = switch (ktype) {
             KeyType.LTSig => "signature",
             KeyType.Noise => "noise",
             else => @panic("invalid key type"),
         };
 
-        // , sksize: const usize, pksize: const usize, name: []const u8
-        if (std.os.argv.len == 2 and std.mem.eql(u8, std.mem.span(std.os.argv[1]), "init")) {
+        if(args.len == 2 and std.mem.eql(u8,args[1], "init")) {
             const sksize = switch(ktype) {
                 KeyType.LTSig => sodium.crypto_sign_SECRETKEYBYTES,
                 KeyType.Noise => sodium.crypto_scalarmult_SCALARBYTES,
@@ -227,49 +231,43 @@ fn check_or_init(path: [:0]const u8, ktype: KeyType) void {
                 KeyType.LTSig => {
                     if(0!=sodium.crypto_sign_keypair(pk.ptr, sk.ptr)) {
                         warn("failed to generate ltsigkey\n", .{});
-                        posix.exit(1);
+                        std.process.exit(1);
                     }
                 },
                 KeyType.Noise => {
                     sodium.randombytes_buf(sk.ptr, sodium.crypto_scalarmult_SCALARBYTES);
                     if(0!=sodium.crypto_scalarmult_base( pk.ptr, sk.ptr)) {
                         warn("failed to generate noise pubkey\n", .{});
-                        posix.exit(1);
+                        std.process.exit(1);
                     }
                 },
                 else => @panic("invalid key type"),
             }
 
-            if (posix.open(path, .{ .ACCMODE = .WRONLY, .CREAT = true }, 0o600)) |f| {
-                defer posix.close(f);
-                const w = posix.write(f, sk) catch |err| {
+            if(std.Io.Dir.cwd().createFile(io, path,
+                                             .{.permissions = std.Io.File.Permissions.fromMode(0o600)})) |f| {
+                defer f.close(io);
+                f.writeStreamingAll(io, sk) catch |err| {
                     warn("failed to write lt {s} key: {}\n", .{type_name,err});
-                    posix.exit(1);
+                    std.process.exit(1);
                 };
-                if (w != sk.len) {
-                    warn("failed to write secret key, disk full?\n", .{});
-                    posix.exit(1);
-                }
             } else |err| {
                 warn("failed to save lt {s} key: {}\n", .{type_name,err});
-                posix.exit(1);
+                std.process.exit(1);
             }
 
             const pubpath = mem.concat(allocator, u8, &[_][]const u8{ path, ".pub" }) catch @panic("OOM");
             defer allocator.free(pubpath);
-            if (posix.open(pubpath, .{ .ACCMODE = .WRONLY, .CREAT = true }, 0o666)) |f| {
-                defer posix.close(f);
-                const w = posix.write(f, pk) catch |err| {
+            if(std.Io.Dir.cwd().createFile(io, pubpath,
+                                             .{.permissions = std.Io.File.Permissions.fromMode(0o666)})) |f| {
+                defer f.close(io);
+                f.writeStreamingAll(io, pk) catch |err| {
                     warn("failed to write lt {s} key: {}\n", .{type_name,err});
-                    posix.exit(1);
+                    std.process.exit(1);
                 };
-                if (w != pk.len) {
-                    warn("failed to write public key, disk full?\n", .{});
-                    posix.exit(1);
-                }
             } else |err| {
                 warn("failed to save lt {s} key: {}\n", .{type_name,err});
-                posix.exit(1);
+                std.process.exit(1);
             }
             warn("successfully created long-term {s} key pair at:\n", .{type_name});
             warn("{s}\n", .{path});
@@ -282,8 +280,8 @@ fn check_or_init(path: [:0]const u8, ktype: KeyType) void {
             warn("The following is the base64 encoded public key that you can also share:\n{s}\n", .{b64pk});
         } else {
             warn("Long-term {s} key at {s} is not readable.\n", .{type_name, path});
-            warn("You can generate one by running: {s} init\n", .{std.mem.span(std.os.argv[0])});
-            posix.exit(1);
+            warn("You can generate one by running: {s} init\n", .{args[0]});
+            std.process.exit(1);
         }
     };
 }
@@ -291,13 +289,13 @@ fn check_or_init(path: [:0]const u8, ktype: KeyType) void {
 fn load_pubkeys(path: []const u8) !KeyStore {
     var map = KeyStore.init(allocator);
 
-    const file = try std.fs.cwd().openFile(path, .{});
-    defer file.close();
+    const file = try std.Io.Dir.cwd().openFile(io, path,  .{});
+    defer file.close(io);
 
     // Wrap the file reader in a buffered reader.
     // Since it's usually faster to read a bunch of bytes at once.
     var buffer = [_]u8{0} ** 1024;
-    var file_reader = file.reader(&buffer);
+    var file_reader = file.reader(io, &buffer);
     const reader = &(file_reader.interface);
 
     var k = [_]u8{0} ** sodium.crypto_generichash_BYTES;
@@ -338,11 +336,11 @@ fn ssl_file_missing(path: []const u8) noreturn {
     warn("The SSL key at {s} is not a readable file. Make sure this is a proper ssl key.\n", .{path});
     warn("Check out https://klutshnik.info/server_install.html#:~:text=Get%20a%20proper%20TLS%20cert .\n", .{});
     warn("Aborting.\n", .{});
-    posix.exit(1);
+    std.process.exit(1);
 }
 
-fn loadcfg() anyerror!Config {
-    const home = posix.getenv("HOME") orelse "/nonexistant";
+fn loadcfg(args: []const [:0]const u8, env: *const std.process.Environ.Map) anyerror!Config {
+    const home = env.get("HOME") orelse "/nonexistant";
     const cfg1 = mem.concat(allocator, u8, &[_][]const u8{ home, "/.config/klutshnikd/config" }) catch unreachable;
     defer allocator.free(cfg1);
     const cfg2 = mem.concat(allocator, u8, &[_][]const u8{ home, "/.klutshnikdrc" }) catch unreachable;
@@ -385,33 +383,33 @@ fn loadcfg() anyerror!Config {
                     cfg.address = if (server.Table.keys.get("address")) |v| try allocator.dupe(u8, v.String) else cfg.address;
                     cfg.port = if (server.Table.keys.get("port")) |v| @intCast(v.Integer) else cfg.port;
                     cfg.timeout = if (server.Table.keys.get("timeout")) |v| @intCast(v.Integer) else cfg.timeout;
-                    cfg.datadir = if (server.Table.keys.get("datadir")) |v| expandpath(v.String) else cfg.datadir;
+                    cfg.datadir = if (server.Table.keys.get("datadir")) |v| expandpath(env, v.String) else cfg.datadir;
                     cfg.max_kids = if (server.Table.keys.get("max_kids")) |v| @intCast(v.Integer) else cfg.max_kids;
-                    cfg.ssl_key = if (server.Table.keys.get("ssl_key")) |v| expandpath(v.String) else cfg.ssl_key;
-                    cfg.ssl_cert = if (server.Table.keys.get("ssl_cert")) |v| expandpath(v.String) else cfg.ssl_cert;
+                    cfg.ssl_key = if (server.Table.keys.get("ssl_key")) |v| expandpath(env, v.String) else cfg.ssl_key;
+                    cfg.ssl_cert = if (server.Table.keys.get("ssl_cert")) |v| expandpath(env, v.String) else cfg.ssl_cert;
                     cfg.ts_epsilon = if (server.Table.keys.get("ts_epsilon")) |v| @intCast(v.Integer) else cfg.ts_epsilon;
-                    cfg.ltsigkey = if (server.Table.keys.get("ltsigkey")) |v| expandpath(v.String) else cfg.ltsigkey;
-                    cfg.noisekey = if (server.Table.keys.get("noisekey")) |v| expandpath(v.String) else cfg.noisekey;
+                    cfg.ltsigkey = if (server.Table.keys.get("ltsigkey")) |v| expandpath(env, v.String) else cfg.ltsigkey;
+                    cfg.noisekey = if (server.Table.keys.get("noisekey")) |v| expandpath(env, v.String) else cfg.noisekey;
                     if (server.Table.keys.get("authorized_keys")) |v| {
-                        const path = expandpath(v.String);
+                        const path = expandpath(env, v.String);
                         defer allocator.free(path);
                         if (load_pubkeys(path)) |retval| {
                             cfg.authorized_keys = retval;
                         } else |err| {
                             warn("failed to load authorized keys from {s}: {}\n", .{path, err});
-                            if (std.os.argv.len != 2 or !std.mem.eql(u8, std.mem.span(std.os.argv[1]), "init")) {
-                                posix.exit(1);
+                            if(args.len != 2 or !std.mem.eql(u8,args[1], "init")) {
+                                std.process.exit(1);
                             }
                         }
                     } else {
                         warn("missing authorized_keys in configuration\nabort.", .{});
-                        posix.exit(1);
+                        std.process.exit(1);
                     }
                     if (server.Table.keys.get("record_salt")) |v| {
                         cfg.record_salt = allocator.dupe(u8, v.String) catch @panic("oom");
                     } else {
                         warn("missing record_salt in configuration\nabort.", .{});
-                        posix.exit(1);
+                        std.process.exit(1);
                     }
                 }
             } else |err| {
@@ -425,25 +423,23 @@ fn loadcfg() anyerror!Config {
         }
     }
 
-    var env = try std.process.getEnvMap(allocator);
-    defer env.deinit();
     cfg.verbose = std.mem.eql(u8, env.get("KLUTSHNIK_VERBOSE") orelse if(cfg.verbose) "true" else "false", "true");
     cfg.address     = if (env.get("KLUTSHNIK_ADDRESS"))     |v| try allocator.dupe(u8, v) else cfg.address;
     cfg.port        = if (env.get("KLUTSHNIK_PORT"))        |v| try std.fmt.parseInt(u16, v, 10) else cfg.port;
     cfg.timeout     = if (env.get("KLUTSHNIK_TIMEOUT"))     |v| try std.fmt.parseInt(u16, v, 10) else cfg.timeout;
-    cfg.datadir     = if (env.get("KLUTSHNIK_DATADIR"))     |v| expandpath(v) else cfg.datadir;
+    cfg.datadir     = if (env.get("KLUTSHNIK_DATADIR"))     |v| expandpath(env, v) else cfg.datadir;
     cfg.max_kids    = if (env.get("KLUTSHNIK_MAX_KIDS"))    |v| try std.fmt.parseInt(u16, v, 10) else cfg.max_kids;
-    cfg.ssl_key     = if (env.get("KLUTSHNIK_SSL_KEY"))     |v| expandpath(v) else cfg.ssl_key;
-    cfg.ssl_cert    = if (env.get("KLUTSHNIK_SSL_CERT"))    |v| expandpath(v) else cfg.ssl_cert;
+    cfg.ssl_key     = if (env.get("KLUTSHNIK_SSL_KEY"))     |v| expandpath(env, v) else cfg.ssl_key;
+    cfg.ssl_cert    = if (env.get("KLUTSHNIK_SSL_CERT"))    |v| expandpath(env, v) else cfg.ssl_cert;
     cfg.ts_epsilon  = if (env.get("KLUTSHNIK_TS_EPSILON"))  |v| try std.fmt.parseInt(u64, v, 10) else cfg.ts_epsilon;
-    cfg.ltsigkey    = if (env.get("KLUTSHNIK_LTSIGKEY"))    |v| expandpath(v) else cfg.ltsigkey;
-    cfg.noisekey    = if (env.get("KLUTSHNIK_NOISEKEY"))    |v| expandpath(v) else cfg.noisekey;
+    cfg.ltsigkey    = if (env.get("KLUTSHNIK_LTSIGKEY"))    |v| expandpath(env, v) else cfg.ltsigkey;
+    cfg.noisekey    = if (env.get("KLUTSHNIK_NOISEKEY"))    |v| expandpath(env, v) else cfg.noisekey;
     cfg.record_salt = if (env.get("KLUTSHNIK_RECORD_SALT")) |v| try allocator.dupe(u8, v) else cfg.record_salt;
 
-    std.fs.cwd().access(cfg.ssl_key, .{}) catch {
+    std.Io.Dir.cwd().access(io, cfg.ssl_key, .{}) catch {
         ssl_file_missing(cfg.ssl_key);
     };
-    std.fs.cwd().access(cfg.ssl_cert, .{}) catch {
+    std.Io.Dir.cwd().access(io, cfg.ssl_cert, .{}) catch {
         ssl_file_missing(cfg.ssl_cert);
     };
 
@@ -460,29 +456,29 @@ fn loadcfg() anyerror!Config {
         warn("cfg.record_salt: \"{s}\"\n", .{cfg.record_salt});
     }
 
-    check_or_init(cfg.ltsigkey, KeyType.LTSig);
-    check_or_init(cfg.noisekey, KeyType.Noise);
-    if (std.os.argv.len == 2 and std.mem.eql(u8, std.mem.span(std.os.argv[1]), "init")) {
+    check_or_init(args, cfg.ltsigkey, KeyType.LTSig);
+    check_or_init(args, cfg.noisekey, KeyType.Noise);
+    if(args.len == 2 and std.mem.eql(u8,args[1], "init")) {
 
         const ltsigkey: []const u8 = load(&cfg, cfg.ltsigkey, sodium.crypto_sign_SECRETKEYBYTES) catch |err| {
             warn("failed to load ltsig key: {}\n", .{err});
-            posix.exit(1);
+            std.process.exit(1);
         };
         const pks = allocator.alloc(u8, sodium.crypto_sign_PUBLICKEYBYTES+sodium.crypto_scalarmult_BYTES) catch @panic("OOM");
         defer allocator.free(pks);
         if(0!=sodium.crypto_sign_ed25519_sk_to_pk(pks[0..sodium.crypto_sign_PUBLICKEYBYTES].ptr, ltsigkey.ptr)) {
             warn("failed to generate ltsig pubkey\n", .{});
-            posix.exit(1);
+            std.process.exit(1);
         }
 
         const noisekey: []const u8 = load(&cfg, cfg.noisekey, sodium.crypto_scalarmult_SCALARBYTES) catch |err| {
             warn("failed to load noise key: {}\n", .{err});
-            posix.exit(1);
+            std.process.exit(1);
         };
 
         if(0!=sodium.crypto_scalarmult_base( pks[sodium.crypto_sign_PUBLICKEYBYTES..].ptr, noisekey.ptr)) {
             warn("failed to generate noise pubkey\n", .{});
-            posix.exit(1);
+            std.process.exit(1);
         }
 
         const b64pk: []u8 = allocator.alloc(u8, std.base64.standard.Encoder.calcSize(pks[0..].len)) catch @panic("OOM");
@@ -490,7 +486,7 @@ fn loadcfg() anyerror!Config {
         _ = std.base64.standard.Encoder.encode(b64pk, pks);
         warn("The following are the base64 encoded long-term and noise public keys that need to be added to all KMS authorized_keys files:\n{s}\n", .{b64pk});
 
-        posix.exit(0);
+        std.process.exit(0);
     }
 
     return cfg;
@@ -500,15 +496,14 @@ fn loadcfg() anyerror!Config {
 /// "\x00\x04fail" to the client and terminates.
 fn fail(s: *sslStream) noreturn {
     if (DEBUG) {
-        std.debug.dumpCurrentStackTrace(@frameAddress());
-        warn("fail\n", .{});
-        std.debug.dumpCurrentStackTrace(@returnAddress());
+        warn("return addr stack trace ->\n", .{});
+        std.debug.dumpCurrentStackTrace(.{.first_address = @returnAddress()});
     }
     _ = s.write("\x00\x04fail") catch null;
     _ = s.flush() catch null;
-    _ = std.os.linux.shutdown(conn.stream.handle, std.os.linux.SHUT.RDWR);
+    _ = std.os.linux.shutdown(conn.socket.handle, std.os.linux.SHUT.RDWR);
     _ = s.close() catch null;
-    posix.exit(0);
+    std.process.exit(0);
 }
 
 fn read_pkt(s: *sslStream) []u8 {
@@ -571,20 +566,22 @@ fn tohexid(id: [32]u8) anyerror![]u8 {
 }
 
 fn load(cfg: *const Config, path: []const u8, size: usize) ![]const u8 {
-    if (posix.open(path, .{ .ACCMODE = .RDONLY }, 0)) |f| {
-        defer posix.close(f);
-        const key: []u8 = s_allocator.alloc(u8, @intCast(size)) catch @panic("oom");
-        _ = posix.read(f, key) catch |err| {
-            if (cfg.verbose) warn("cannot open {s} error: {}\n", .{ path, err });
-        };
-        return key;
-    } else |err| {
+    const blob = std.Io.Dir.cwd().readFileAlloc(io,
+                                                path,
+                                                s_allocator,
+                                                .limited(size+1)) catch |err| {
         if (err != error.FileNotFound) {
             if (cfg.verbose) warn("cannot open {s} error: {}\n", .{ path, err });
         }
         warn("failed to open: {s}\n", .{ path });
         return err;
+
+    };
+    if (blob.len != size) {
+        log("{s} has not expected size of {}B instead has {}B\n", .{ path, size, blob.len }, "");
+        return LoadBlobError.WrongSize;
     }
+    return blob;
 }
 
 const CB_Ctx = struct {
@@ -626,10 +623,10 @@ fn store(cfg: *const Config, recid: []const u8, fieldid: []const u8, data: []con
 
     const rec_path = mem.concat(allocator, u8, &[_][]const u8{ cfg.datadir, "/", hexid[0..] }) catch @panic("oom");
     defer allocator.free(rec_path);
-    if(utils.dir_exists(rec_path)) {
+    if(utils.dir_exists(io, rec_path)) {
         if(new) return error.PathAlreadyExists;
     } else {
-        posix.mkdir(rec_path, 0o700) catch |err| {
+        std.Io.Dir.cwd().createDir(io, rec_path, std.Io.File.Permissions.fromMode(0o700)) catch |err| {
             log("failed to create {s}, error: {}\n", .{rec_path, err}, recid);
             return err;
         };
@@ -638,21 +635,21 @@ fn store(cfg: *const Config, recid: []const u8, fieldid: []const u8, data: []con
     const path = mem.concat(allocator, u8, &[_][]const u8{ rec_path, "/", fieldid }) catch @panic("oom");
     defer allocator.free(path);
 
-    const file = try std.fs.cwd().createFile(path,
-                                             .{.truncate = true,
-                                               .exclusive = new,
-                                               .lock = .exclusive,
-                                               .mode = private_mode});
-    defer file.close();
+    const file = try std.Io.Dir.cwd().createFile(io, path,
+                                                 .{.truncate = true,
+                                                   .exclusive = new,
+                                                   .lock = .exclusive,
+                                                   .permissions = std.Io.File.Permissions.fromMode(0o600)});
+    defer file.close(io);
 
     var buffer = [_]u8{0} ** 1024;
-    var fw = file.writer(&buffer);
+    var fw = file.writer(io, &buffer);
     const writer = &fw.interface;
     try writer.writeAll(data);
     try writer.flush();
 }
 
-fn open(cfg: *const Config, recid: []const u8, fieldid: []const u8) !std.fs.File {
+fn open(cfg: *const Config, recid: []const u8, fieldid: []const u8) !std.Io.File {
     var local_id = [_]u8{0} ** blake2b.digest_length;
     blake2b.hash(recid[0..], &local_id, .{ .key = cfg.record_salt });
 
@@ -661,7 +658,7 @@ fn open(cfg: *const Config, recid: []const u8, fieldid: []const u8) !std.fs.File
 
     const rec_path = mem.concat(allocator, u8, &[_][]const u8{ cfg.datadir, "/", hexid[0..] }) catch @panic("oom");
     defer allocator.free(rec_path);
-    if(!utils.dir_exists(rec_path)) {
+    if(!utils.dir_exists(io, rec_path)) {
         log("rec doesn't exist {s}\n", .{rec_path}, recid);
         return error.FileNotFound;
     }
@@ -669,14 +666,14 @@ fn open(cfg: *const Config, recid: []const u8, fieldid: []const u8) !std.fs.File
     const path = mem.concat(allocator, u8, &[_][]const u8{ rec_path, "/", fieldid }) catch @panic("oom");
     defer allocator.free(path);
 
-    return try std.fs.cwd().openFile(path, .{});
+    return try std.Io.Dir.cwd().openFile(io, path, .{});
 }
 
 fn loadx(cfg: *const Config, recid: []const u8, fieldid: []const u8, data: []u8) !void {
     const file = try open(cfg,recid,fieldid);
 
     var buffer: [1024]u8 = undefined;
-    var fr = file.reader(&buffer);
+    var fr = file.reader(io, &buffer);
     _ = try fr.interface.readSliceAll(data);
 }
 
@@ -1077,17 +1074,17 @@ fn toprf_update(cfg: *const Config, s: *sslStream, req: *const UpdateReq) void {
 
 fn handle_read_err(err: anyerror, s: *sslStream) noreturn {
     if (err == ssl.BearError.UNSUPPORTED_VERSION) {
-        warn("{f} unsupported TLS version. aborting.\n", .{conn.address});
+        warn("{f} unsupported TLS version. aborting.\n", .{conn.socket.address});
         s.close() catch unreachable;
-        posix.exit(0);
+        std.process.exit(0);
     } else if (err == ssl.BearError.UNKNOWN_ERROR_582 or err == ssl.BearError.UNKNOWN_ERROR_552) {
-        warn("{f} unknown TLS error: {}. aborting.\n", .{ conn.address, err });
+        warn("{f} unknown TLS error: {}. aborting.\n", .{ conn.socket.address, err });
         s.close() catch unreachable;
-        posix.exit(0);
+        std.process.exit(0);
     } else if (err == ssl.BearError.BAD_VERSION) {
-        warn("{f} bad TLS version. aborting.\n", .{conn.address});
+        warn("{f} bad TLS version. aborting.\n", .{conn.socket.address});
         s.close() catch unreachable;
-        posix.exit(0);
+        std.process.exit(0);
     }
     warn("read error: {}\n", .{err});
     @panic("network error");
@@ -1106,13 +1103,17 @@ fn read_req(s: *sslStream, comptime T: type, op: []const u8) anyerror!*T {
     }
     const req: *T = @ptrCast(buf[0..]);
 
-    log("{f} op {s}\n", .{ conn.address, op }, &req.id);
+    log("{f} op {s}\n", .{ conn.socket.address, op }, &req.id);
     return req;
 }
 
 fn auth(cfg: *const Config, s: *sslStream, op: KlutshnikOp, pk: *ed25519.PublicKey, reqbuf: []const u8) void {
+    const reqid = reqbuf[1..33];
     var nonce : [32]u8 = undefined;
-    std.crypto.random.bytes(&nonce);
+    std.Io.randomSecure(io, &nonce) catch |e| {
+        log("failed to get entropy: {}\n", .{e}, reqid);
+        fail(s);
+    };
     send_pkt(s, nonce[0..]);
 
     const perm = switch (op) {
@@ -1134,8 +1135,6 @@ fn auth(cfg: *const Config, s: *sslStream, op: KlutshnikOp, pk: *ed25519.PublicK
     }
     const siglen = ed25519.Signature.encoded_length;
     const sig = ed25519.Signature.fromBytes(sigbuf[0..siglen].*);
-
-    const reqid = reqbuf[1..33];
 
     var owner: [sodium.crypto_sign_PUBLICKEYBYTES]u8 = undefined;
     loadx(cfg, reqid, "owner", &owner) catch |err| {
@@ -1160,7 +1159,7 @@ fn auth(cfg: *const Config, s: *sslStream, op: KlutshnikOp, pk: *ed25519.PublicK
             fail(s);
         };
         var auth_size: usize = undefined;
-        if(authfd.stat()) |st| {
+        if(authfd.stat(io)) |st| {
             if(st.size >= 1<<20) {
                 log("auth file too big: {}\n", .{st.size}, reqid);
                 fail(s);
@@ -1172,12 +1171,12 @@ fn auth(cfg: *const Config, s: *sslStream, op: KlutshnikOp, pk: *ed25519.PublicK
         }
         const authbuf= allocator.alloc(u8, auth_size) catch @panic("oom");
         var buffer: [1024]u8 = undefined;
-        var fr = authfd.reader(&buffer);
+        var fr = authfd.reader(io, &buffer);
         _ = fr.interface.readSliceAll(authbuf) catch |err| {
             log("failed to load auth file: {}\n", .{err}, reqid);
             fail(s);
         };
-        authfd.close();
+        authfd.close(io);
         const auth_sig = ed25519.Signature.fromBytes(authbuf[0..siglen].*);
         auth_sig.verify(authbuf[siglen..], owner_pk) catch |err| {
             log("auth fail: {}\n", .{err}, reqbuf[1..1+sodium.crypto_generichash_BYTES]);
@@ -1228,7 +1227,7 @@ fn create(cfg: *const Config, s: *sslStream, req: *const CreateReq) void {
     const path = mem.concat(allocator, u8, &[_][]const u8{ cfg.datadir, "/", hexid[0..] }) catch @panic("oom");
     defer allocator.free(path);
 
-    if (utils.dir_exists(path)) {
+    if (utils.dir_exists(io, path)) {
         log("record exists at {s}\n", .{path}, &req.id);
         fail(s);
     }
@@ -1271,7 +1270,7 @@ fn update(cfg: *const Config, s: *sslStream, req: *const UpdateReq) void {
     const path = mem.concat(allocator, u8, &[_][]const u8{ cfg.datadir, "/", hexid[0..] }) catch @panic("oom");
     defer allocator.free(path);
 
-    if(!utils.dir_exists(path)) fail(s);
+    if(!utils.dir_exists(io, path)) fail(s);
 
     toprf_update(cfg, s, req);
     log("success updating key by {x}\n", .{&req.pk}, &req.id);
@@ -1325,9 +1324,9 @@ fn delete(cfg: *const Config, s: *sslStream, req: *const DeleteReq) void {
     const path = mem.concat(allocator, u8, &[_][]const u8{ cfg.datadir, "/", hexid[0..] }) catch @panic("oom");
     defer allocator.free(path);
 
-    if (!utils.dir_exists(path)) fail(s);
+    if (!utils.dir_exists(io, path)) fail(s);
 
-    std.fs.cwd().deleteTree(path) catch |err| {
+    std.Io.Dir.cwd().deleteTree(io, path) catch |err| {
         log("failed to delete record {s}: {}\n", .{path, err}, hexid);
         fail(s);
     };
@@ -1352,7 +1351,7 @@ fn modauth(cfg: *const Config, s: *sslStream, req: *const ModAuthReq) void {
     const record = mem.concat(allocator, u8, &[_][]const u8{ cfg.datadir, "/", hexid[0..] }) catch @panic("oom");
     defer allocator.free(record);
 
-    if (!utils.dir_exists(record)) fail(s);
+    if (!utils.dir_exists(io, record)) fail(s);
 
     ////////
     var pk : ed25519.PublicKey = undefined;
@@ -1364,7 +1363,7 @@ fn modauth(cfg: *const Config, s: *sslStream, req: *const ModAuthReq) void {
         fail(s);
     };
     var auth_size: usize = undefined;
-    if(authfd.stat()) |st| {
+    if(authfd.stat(io)) |st| {
         if(st.size >= 1<<20) {
             log("auth file too big: {}\n", .{st.size}, &req.id);
             fail(s);
@@ -1376,7 +1375,7 @@ fn modauth(cfg: *const Config, s: *sslStream, req: *const ModAuthReq) void {
     }
     const authbuf= allocator.alloc(u8, auth_size) catch @panic("oom");
     var buffer: [1024]u8 = undefined;
-    var fr = authfd.reader(&buffer);
+    var fr = authfd.reader(io, &buffer);
     _ = fr.interface.readSliceAll(authbuf) catch |err| {
         log("failed to load auth file: {}\n", .{err}, &req.id);
         fail(s);
@@ -1457,7 +1456,7 @@ fn handler(cfg: *const Config, s: *sslStream) !void {
                 warn("read create request failed with {}", .{e});
                 fail(s);
             };
-            defer allocator.free(@as(*[@sizeOf(CreateReq)]u8, @ptrCast(req)));
+            defer allocator.destroy(req);
             create(cfg, s, req);
         },
         KlutshnikOp.DECRYPT => {
@@ -1465,7 +1464,7 @@ fn handler(cfg: *const Config, s: *sslStream) !void {
                 warn("read decrypt request failed with {}", .{e});
                 fail(s);
             };
-            defer allocator.free(@as(*[@sizeOf(DecryptReq)]u8, @ptrCast(req)));
+            defer allocator.destroy(req);
             decrypt(cfg, s, req);
         },
         KlutshnikOp.DELETE => {
@@ -1473,7 +1472,7 @@ fn handler(cfg: *const Config, s: *sslStream) !void {
                 warn("read delete request failed with {}", .{e});
                 fail(s);
             };
-            defer allocator.free(@as(*[@sizeOf(DeleteReq)]u8, @ptrCast(req)));
+            defer allocator.destroy(req);
             delete(cfg, s, req);
         },
         KlutshnikOp.UPDATE => {
@@ -1481,7 +1480,7 @@ fn handler(cfg: *const Config, s: *sslStream) !void {
                 warn("read update request failed with {}", .{e});
                 fail(s);
             };
-            defer allocator.free(@as(*[@sizeOf(UpdateReq)]u8, @ptrCast(req)));
+            defer allocator.destroy(req);
             update(cfg, s, req);
         },
         KlutshnikOp.MODAUTH => {
@@ -1489,7 +1488,7 @@ fn handler(cfg: *const Config, s: *sslStream) !void {
                 warn("read mod auth request failed with {}", .{e});
                 fail(s);
             };
-            defer allocator.free(@as(*[@sizeOf(ModAuthReq)]u8, @ptrCast(req)));
+            defer allocator.destroy(req);
             modauth(cfg, s, req);
         },
         KlutshnikOp.REFRESH => {
@@ -1497,34 +1496,40 @@ fn handler(cfg: *const Config, s: *sslStream) !void {
                 warn("read refresh request failed with {}", .{e});
                 fail(s);
             };
-            defer allocator.free(@as(*[@sizeOf(RefreshReq)]u8, @ptrCast(req)));
+            defer allocator.destroy(req);
             refresh(cfg, s, req);
         },
         _ => {
-            if (cfg.verbose) warn("{f} invalid op({}). aborting.\n", .{ conn.address, op });
+            if (cfg.verbose) warn("{f} invalid op({}). aborting.\n", .{ conn.socket.address, op });
         },
     }
     try s.close();
-    posix.exit(0);
+    std.process.exit(0);
 }
 
 /// classical forking server with tcp connection wrapped by bear ssl
 /// number of childs is configurable, as is the listening IP address and port
-pub fn main() !void {
+pub fn main(init: std.process.Init) !void {
+    io = init.io;
+    allocator = init.gpa;
+    s_state = secret_allocator.secretAllocator(allocator);
+    s_allocator = s_state.allocator();
+    stdout_writer = std.Io.File.stdout().writer(io, &stdout_buffer);
+    const args = try init.minimal.args.toSlice(init.arena.allocator());
     try stdout.print("starting up klutshnik server\n", .{});
     try stdout.flush(); // don't forget to flush!
 
     if(DEBUG and build_config.system_libs==false ) {
-        oprf_utils.debug = 1;
-        stp_dkg.log_file = @ptrCast(stdio.fdopen(2,"w"));
+        oprf_utils.liboprf_debug = 1;
+        oprf_utils.liboprf_log_file = @ptrCast(stdio.fdopen(2,"w"));
     }
 
-    const cfg = try loadcfg();
+    const cfg = try loadcfg(args,init.environ_map);
 
-    if (!utils.dir_exists(cfg.datadir)) {
-        posix.mkdir(cfg.datadir, 0o700) catch |err| {
+    if (!utils.dir_exists(io, cfg.datadir)) {
+        std.Io.Dir.cwd().createDir(io, cfg.datadir, std.Io.File.Permissions.fromMode(0o700)) catch |err| {
             log("failed to create {s}, error: {}\n", .{cfg.datadir, err}, "");
-            posix.exit(1);
+            std.process.exit(1);
         };
     }
 
@@ -1533,25 +1538,12 @@ pub fn main() !void {
     var certs_len: usize = undefined;
     const certs: *ssl.c.br_x509_certificate = ssl.c.read_certificates(@ptrCast(cfg.ssl_cert), &certs_len);
 
-    const addresses = try std.net.getAddressList(allocator, cfg.address, cfg.port);
-    defer addresses.deinit();
-    for (addresses.addrs) |addr| {
-        var addrtype: *const [4:0]u8 = undefined;
-        switch (addr.any.family) {
-            posix.AF.INET => addrtype = "ipv4",
-            posix.AF.INET6 => addrtype = "ipv6",
-            posix.AF.UNIX => addrtype = "unix",
-            else => unreachable,
-        }
-        warn("addr: {s}, {f}\n", .{ addrtype, addr });
-    }
+    const addr = try net.IpAddress.parse(cfg.address, cfg.port);
 
-    const addr = try net.Address.parseIp(cfg.address, cfg.port);
-
-    var srv = addr.listen(.{ .reuse_address = true }) catch |err| switch (err) {
+    var srv = addr.listen(io, .{ .reuse_address = true }) catch |err| switch (err) {
         error.AddressInUse => {
             warn("port {} already in use.", .{cfg.port});
-            posix.exit(1);
+            std.process.exit(1);
         },
         else => {
             return err;
@@ -1564,13 +1556,19 @@ pub fn main() !void {
         .sec = cfg.timeout,
         .usec = 0
     };
-    try posix.setsockopt(srv.stream.handle, posix.SOL.SOCKET, posix.SO.SNDTIMEO, mem.asBytes(&to));
-    try posix.setsockopt(srv.stream.handle, posix.SOL.SOCKET, posix.SO.RCVTIMEO, mem.asBytes(&to));
+    if(0!=posix.setsockopt(srv.socket.handle, posix.SOL.SOCKET, posix.SO.SNDTIMEO, mem.asBytes(&to), mem.asBytes(&to).len)) {
+        warn("failed to set timeout on socket.", .{});
+        std.process.exit(1);
+    }
+    if(0!=posix.setsockopt(srv.socket.handle, posix.SOL.SOCKET, posix.SO.RCVTIMEO, mem.asBytes(&to), mem.asBytes(&to).len)) {
+        warn("failed to set timeout on socket.", .{});
+        std.process.exit(1);
+    }
 
     var kids = BufSet.init(allocator);
 
     while (true) {
-        if (srv.accept()) |c| {
+        if (srv.accept(io)) |c| {
             conn = c;
             log("new connection\n", .{}, "");
         } else |e| {
@@ -1578,7 +1576,7 @@ pub fn main() !void {
                 while (true) {
                     const Status = if (builtin.link_libc) c_int else u32;
                     var status: Status = undefined;
-                    const rc = posix.system.waitpid(-1, &status, posix.system.W.NOHANG);
+                    const rc = posix.waitpid(-1, &status, posix.W.NOHANG);
                     if (rc > 0) {
                         kids.remove(mem.asBytes(&rc));
                         if (cfg.verbose) warn("removing kid {} from pool\n", .{rc});
@@ -1591,12 +1589,12 @@ pub fn main() !void {
 
         while (kids.count() >= cfg.max_kids) {
             log("pool full, waiting for kid to die\n", .{}, "");
-            const pid = posix.waitpid(-1, 0).pid;
+            const pid = posix.waitpid(-1, null, 0);
             log("wait returned: {}\n", .{pid}, "");
             kids.remove(mem.asBytes(&pid));
         }
 
-        var pid = try posix.fork();
+        var pid = posix.fork();
         switch (pid) {
             0 => {
                 setSigHandler();
@@ -1609,21 +1607,21 @@ pub fn main() !void {
                 if (ssl.c.br_ssl_server_reset(&sc) == 0) {
                     return ssl.convertError(ssl.c.br_ssl_engine_last_error(&sc.eng));
                 }
-                var s = ssl.initStream(&sc.eng, &conn.stream, &conn.stream);
+                var s = ssl.initStream(&sc.eng, &conn.socket, &conn.socket);
                 handler(&cfg, &s) catch |err| {
                     if (err == error.WouldBlock or err == error.IO) {
                         if (cfg.verbose) warn("timeout, abort.\n", .{});
-                        _ = std.os.linux.shutdown(conn.stream.handle, std.os.linux.SHUT.RDWR);
-                        conn.stream.close();
+                        _ = std.os.linux.shutdown(conn.socket.handle, std.os.linux.SHUT.RDWR);
+                        conn.socket.close(io);
                     } else {
                         return err;
                     }
                 };
-                posix.exit(0);
+                std.process.exit(0);
             },
             else => {
                 try kids.insert(mem.asBytes(&pid));
-                conn.stream.close();
+                conn.socket.close(io);
             },
         }
     }
