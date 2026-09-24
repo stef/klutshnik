@@ -36,7 +36,7 @@ setup(name = 'klutshnik',
                      ],
       entry_points = {
           'console_scripts': [
-              'klutshnik = klutshnik.klutshnik:main',
+              'klutshnik = klutshnik.core:main',
               #'genkey25519 = klutshnik.klutshnik:genkey'
           ],
       },

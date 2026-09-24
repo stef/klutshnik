@@ -410,16 +410,15 @@ def rotate(m, keyid, ltsigpub, ltsigkey, t, ts_epsilon, sig_pks, lepoch):
     except Exception as e:
       m.close()
       # todo handle cheaters
-      #if pyoprf.toprf_update_stpstate_cheater_len(stp) > 0:
-      #  cheaters, cheats = pyoprf.stp_dkg_get_cheaters(stp)
-      #  msg=[f"Warning during the tOPRF key update the peers misbehaved: {sorted(cheaters)}"]
-      #  for k, v in cheats:
-      #    msg.append(f"\tmisbehaving peer: {k} was caught: {v}")
-      #  msg = '\n'.join(msg)
-      #  raise ValueError(msg)
-      #else:
-      #  raise ValueError(f"{e} | tp step {cur_step}")
-      raise ValueError(f"{e} | tp step {cur_step}")
+      if pyoprf.toprf_update_stpstate_cheater_len(stp) > 0:
+        cheaters, cheats = pyoprf.tupdate_get_cheaters(stp)
+        msg=[f"Warning during the tOPRF key update the peers misbehaved: {sorted(cheaters)}"]
+        for k, v in cheats:
+          msg.append(f"\tmisbehaving peer: {k} was caught: {v}")
+        msg = '\n'.join(msg)
+        raise ValueError(msg)
+      else:
+        raise ValueError(f"{e} | tp step {cur_step}")
 
     #print(f"outlen: {len(out)}", file=sys.stderr)
     if(len(out)>0):
